@@ -25,6 +25,7 @@ class DB {
     this.cache = [];
     this.folderSizes = null;
     this.dupes = null;
+    this.history = []; // undo stack: { label, changes: [[id, previousTag], ...] }
     this._saveTimer = null;
   }
 
@@ -47,7 +48,7 @@ class DB {
   }
 
   _ingest(rows) {
-    this.items = []; this.byPath = new Map(); this.dupes = null; this.folderSizes = null;
+    this.items = []; this.byPath = new Map(); this.dupes = null; this.folderSizes = null; this.history = []; // ids change on (re)load, so old undo entries are void
     for (const r of rows) this._add(r);
     for (const it of this.items) { const t = this.tags[it.p]; it.tag = TAGS.includes(t) ? t : null; }
     this.bump();
@@ -123,28 +124,61 @@ class DB {
   }
 
   // ---------- tagging ----------
-  setTag(it, tag) {
+  setTag(it, tag, rec) {
+    if (rec && (it.tag || null) !== (tag || null)) rec.push([it.id, it.tag || null]);
     it.tag = tag || null;
     if (tag) this.tags[it.p] = tag; else delete this.tags[it.p];
   }
+  _push(label, rec) {
+    if (!rec.length) return;
+    this.history.push({ label, changes: rec });
+    let total = 0;
+    for (let i = this.history.length - 1; i >= 0; i--) { total += this.history[i].changes.length; if (total > 2e6 || this.history.length - i > 30) { this.history.splice(0, i + 1); break; } }
+  }
+  undoInfo() { const h = this.history[this.history.length - 1]; return h ? { label: h.label, count: h.changes.length, steps: this.history.length } : null; }
+  undo() {
+    const h = this.history.pop();
+    if (!h) return null;
+    for (const [id, prev] of h.changes) { const it = this.items[id]; if (it) this.setTag(it, prev); }
+    this.bump(); this.saveTagsSoon();
+    return { label: h.label, count: h.changes.length };
+  }
+  resetTags() {
+    const rec = [];
+    for (const it of this.items) if (it.tag) this.setTag(it, null, rec);
+    this._push('Reset all tags', rec);
+    this.tags = {};
+    this.bump(); this.saveTagsNow();
+    return rec.length;
+  }
+  /** Forget the scan, tags and duplicate results (files on disk are never touched). */
+  resetAll() {
+    this.items = []; this.byPath = new Map(); this.tags = {}; this.meta = null; this.dupes = null; this.history = [];
+    try { fs.unlinkSync(this.scanFile); } catch { /* none */ }
+    this.bump(); this.saveTagsNow();
+  }
+
   applyTag(ids, tag) {
-    let n = 0;
-    for (const id of ids) { const it = this.items[id]; if (it) { this.setTag(it, tag); n++; } }
+    let n = 0; const rec = [];
+    for (const id of ids) { const it = this.items[id]; if (it) { this.setTag(it, tag, rec); n++; } }
+    this._push(`Tagged ${n.toLocaleString()} item(s) ${tag || 'cleared'}`, rec);
     this.bump(); this.saveTagsSoon();
     return n;
   }
   /** Tag everything at or under a folder (files and projects). */
   tagFolder(folder, tag) {
-    let n = 0;
-    for (const it of this.items) if (isInsideOrSame(it.p, folder)) { this.setTag(it, tag); n++; }
+    let n = 0; const rec = [];
+    for (const it of this.items) if (isInsideOrSame(it.p, folder)) { this.setTag(it, tag, rec); n++; }
+    this._push(`Tagged folder ${tag || 'cleared'} (${n.toLocaleString()})`, rec);
     this.bump(); this.saveTagsSoon();
     return n;
   }
   acceptSuggestions(tab) {
-    let n = 0;
+    let n = 0; const rec = [];
     for (const it of this.items) {
-      if (!it.tag && it.sug && (!tab || tab === 'all' || it.c === tab)) { this.setTag(it, it.sug); n++; }
+      if (!it.tag && it.sug && (!tab || tab === 'all' || it.c === tab)) { this.setTag(it, it.sug, rec); n++; }
     }
+    this._push(`Accepted ${n.toLocaleString()} suggestion(s)`, rec);
     this.bump(); this.saveTagsSoon();
     return n;
   }
@@ -247,7 +281,7 @@ class DB {
         if (!it.tag) { x.undecided++; if (it.sug) x.suggested++; }
       }
     }
-    return { by, tabs, scanned: !!this.meta, meta: this.meta };
+    return { by, tabs, scanned: !!this.meta, meta: this.meta, undo: this.undoInfo() };
   }
 
   storage() {

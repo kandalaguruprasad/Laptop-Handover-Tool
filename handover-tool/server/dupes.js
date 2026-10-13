@@ -39,11 +39,12 @@ async function findDuplicates(db, onProgress) {
 
 /** Mark all-but-one of each group Ignore. Keeps a tagged copy if any, else the oldest. Never overrides existing tags. */
 function markDuplicatesIgnore(db, groups) {
-  let marked = 0;
+  let marked = 0; const rec = [];
   for (const g of groups) {
     const keep = g.find((id) => db.items[id].tag && db.items[id].tag !== 'ignore') ?? g[0];
-    for (const id of g) if (id !== keep && !db.items[id].tag) { db.setTag(db.items[id], 'ignore'); marked++; }
+    for (const id of g) if (id !== keep && !db.items[id].tag) { db.setTag(db.items[id], 'ignore', rec); marked++; }
   }
+  db._push(`Marked ${marked} duplicate(s) Ignore`, rec);
   db.bump(); db.saveTagsSoon();
   return marked;
 }

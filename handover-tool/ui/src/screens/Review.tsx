@@ -164,11 +164,14 @@ export function Review({ state, version }: { state: AppState; version: number })
     setSel(new Set());
   }, [sel]);
 
+  const undo = useCallback(() => api('/api/tag/undo', { body: {} }).then(() => setSel(new Set())).catch(() => {}), []);
+
   useEffect(() => {
     const h = (e: KeyboardEvent) => {
       const t = e.target as HTMLElement;
       if (t && ['INPUT', 'TEXTAREA', 'SELECT'].includes(t.tagName)) return;
-      if ((e.ctrlKey || e.metaKey) && e.key === 'a') { e.preventDefault(); fetchIds().then((ids) => setSel(new Set(ids))); }
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') { e.preventDefault(); undo(); }
+      else if ((e.ctrlKey || e.metaKey) && e.key === 'a') { e.preventDefault(); fetchIds().then((ids) => setSel(new Set(ids))); }
       else if (e.key === 'Escape') setSel(new Set());
       else if (sel.size && !e.ctrlKey && !e.metaKey) {
         const k = e.key.toLowerCase();
@@ -177,7 +180,7 @@ export function Review({ state, version }: { state: AppState; version: number })
     };
     window.addEventListener('keydown', h);
     return () => window.removeEventListener('keydown', h);
-  }, [sel, applyTag]);
+  }, [sel, applyTag, undo]);
 
   const set = (patch: Partial<Filter>) => setF((p) => ({ ...p, ...patch }));
   const tabs = state.summary.tabs;
@@ -213,6 +216,10 @@ export function Review({ state, version }: { state: AppState; version: number })
         </select>
         <label className="flex items-center gap-1"><input type="checkbox" checked={f.group} onChange={(e) => set({ group: e.target.checked })} /> Group by folder</label>
         <div className="ml-auto flex items-center gap-2">
+          <button className="btn" disabled={!state.summary.undo} title={state.summary.undo ? `Undo: ${state.summary.undo.label}` : 'Nothing to undo'} onClick={undo}>
+            ↶ Undo{state.summary.undo ? ` (${state.summary.undo.label})` : ''}
+          </button>
+          <button className="btn" onClick={() => { if (confirm('Remove ALL Company / Mine / Ignore tags from every item? (Your scan stays; no files are touched. You can still Undo this.)')) api('/api/reset', { body: { what: 'tags' } }).then(() => setSel(new Set())); }}>Reset all tags…</button>
           <button className="btn" onClick={() => setDupes(true)}>Duplicates…</button>
           <button className="btn" disabled={!(tabs[f.tab]?.suggested)} onClick={() => api('/api/suggestions/accept', { body: { tab: f.tab } })}>
             Accept suggestions here ({tabs[f.tab]?.suggested ?? 0})
@@ -226,7 +233,7 @@ export function Review({ state, version }: { state: AppState; version: number })
       <div className="flex items-center gap-3 border-b border-zinc-800 px-3 py-1 text-xs text-zinc-500">
         <button className="underline" onClick={() => fetchIds().then((ids) => setSel(new Set(ids)))}>Select all in filter ({meta.count.toLocaleString()})</button>
         {sel.size > 0 && <button className="underline" onClick={() => setSel(new Set())}>Clear selection</button>}
-        <span>{meta.count.toLocaleString()} items · {fmtBytes(meta.bytes)} · click rows to select, shift-click for range · keys: C / M / I tag, X clear, Ctrl+A all, Esc deselect</span>
+        <span>{meta.count.toLocaleString()} items · {fmtBytes(meta.bytes)} · click rows to select, shift-click for range · keys: C / M / I tag, X clear, Ctrl+A all, Esc deselect, Ctrl+Z undo</span>
       </div>
 
       <div ref={parent} className="min-h-0 flex-1 overflow-auto">

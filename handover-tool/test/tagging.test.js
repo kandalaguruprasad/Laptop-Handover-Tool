@@ -64,3 +64,28 @@ test('filters, grouping and paging', async (t) => {
   assert.ok(g.rows.some((r) => r.t === 'g' && r.count === 12));
   assert.strictEqual(app.db.page({ tab: 'all', tag: 'undecided' }, 0, 1).count, app.db.items.length);
 });
+
+test('undo / reset: every bulk tag action can be undone; reset clears tags (undoable) and resetAll forgets the scan', async (t) => {
+  const { app, base } = await scanned();
+  t.after(() => cleanup(base));
+  const db = app.db;
+  const tagged = () => db.items.filter((i) => i.tag).length;
+  assert.strictEqual(db.undo(), null);
+  db.applyTag(db.idsRange({ tab: 'all' }), 'mine'); // the "select all by mistake" case
+  assert.strictEqual(tagged(), db.items.length);
+  db.applyTag([find(app, 'cv.pdf').id], 'ignore');
+  assert.deepStrictEqual(db.undoInfo().count, 1);
+  db.undo();
+  assert.strictEqual(find(app, 'cv.pdf').tag, 'mine', 'undo restores the previous tag, not just null');
+  db.undo();
+  assert.strictEqual(tagged(), 0);
+  assert.strictEqual(db.undoInfo(), null);
+  db.acceptSuggestions(); const n = tagged(); assert.ok(n > 0);
+  db.resetTags(); assert.strictEqual(tagged(), 0); assert.deepStrictEqual(db.tags, {});
+  db.undo(); assert.strictEqual(tagged(), n, 'reset itself is undoable');
+  db.saveTagsNow();
+  db.resetAll();
+  assert.strictEqual(db.items.length, 0);
+  assert.ok(!require('fs').existsSync(db.scanFile));
+  assert.ok(require('fs').existsSync(path.join(base, 'sandbox', 'profile', 'Documents', 'cv.pdf')), 'files untouched');
+});

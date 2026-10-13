@@ -143,6 +143,31 @@ function createApi(app) {
     json(res, { changed: n, cloud });
   });
 
+  route('POST', '/api/tag/undo', async (req, res) => {
+    const r = app.db.undo();
+    app.broadcast({ type: 'db-changed' });
+    json(res, r ? { undone: r } : { error: 'Nothing to undo' }, r ? 200 : 400);
+  });
+
+  // Only the app's own records are reset; no file on disk is touched.
+  route('POST', '/api/reset', async (req, res) => {
+    const b = await readBody(req);
+    if (app.runner && app.runner.active()) return json(res, { error: 'A run is in progress.' }, 409);
+    if (b.what === 'tags') {
+      const n = app.db.resetTags();
+      app.broadcast({ type: 'db-changed' });
+      return json(res, { cleared: n });
+    }
+    if (b.what === 'all') {
+      if (b.word !== 'RESET') return json(res, { error: 'Type RESET to confirm.' }, 400);
+      app.db.resetAll();
+      if (app.journal && app.plan) { app.journal.archive(); app.plan = null; }
+      app.broadcast({ type: 'db-changed' });
+      return json(res, { reset: true });
+    }
+    json(res, { error: 'unknown reset' }, 400);
+  });
+
   route('POST', '/api/suggestions/accept', async (req, res) => {
     const b = await readBody(req);
     const n = app.db.acceptSuggestions(b.tab);

@@ -23,7 +23,7 @@ export interface Settings {
 export interface TabStat { n: number; bytes: number; undecided: number; suggested: number }
 export interface Summary {
   by: Record<'company' | 'mine' | 'ignore' | 'undecided', { n: number; bytes: number }>;
-  tabs: Record<string, TabStat>; scanned: boolean; meta: any;
+  tabs: Record<string, TabStat>; scanned: boolean; meta: any; undo: { label: string; count: number; steps: number } | null;
 }
 export interface ScanState { running: boolean; stats: any; current: string; error: string | null; startedAt: number; lastDone: number | null }
 export interface AppState { mode: 'sandbox' | 'live' | 'readonly'; sandbox: string | null; settings: Settings; scan: ScanState; summary: Summary; platform: string; dataDir: string }

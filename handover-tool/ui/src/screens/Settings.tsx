@@ -102,6 +102,15 @@ export function Settings({ state, refresh }: { state: AppState; refresh: () => v
         </label>
       </section>
 
+      <section className="card space-y-2">
+        <h3 className="font-semibold">Start fresh</h3>
+        <div className="text-xs text-zinc-500">These only reset this app's own records (scan results, tags, plan). They never touch, move or delete any file on your laptop or disk. Your settings are kept.</div>
+        <div className="flex flex-wrap gap-2">
+          <button className="btn" onClick={() => { if (confirm('Remove ALL tags from every item? (You can Undo this in Review.)')) api('/api/reset', { body: { what: 'tags' } }).then(() => alert('All tags cleared.')); }}>Reset all tags</button>
+          <button className="btn btn-danger" onClick={() => { const w = prompt('This forgets the scan, all tags and the current plan so you can start from zero.\n\nType RESET to continue:'); if (w) api('/api/reset', { body: { what: 'all', word: w } }).then(() => { alert('Everything reset. Go to Storage and run a new scan.'); refresh(); }).catch((e) => alert(e.message)); }}>Reset everything (scan, tags, plan)</button>
+        </div>
+      </section>
+
       <section className="card">
         <h3 className="mb-1 font-semibold">Execution</h3>
         <Toggle label="Delete source after verified copy" hint="Source is only ever removed after that specific item was verified." v={s.deleteSourceAfterCopy} on={(b) => set('deleteSourceAfterCopy', b)} />
