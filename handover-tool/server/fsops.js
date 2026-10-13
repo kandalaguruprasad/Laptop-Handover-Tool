@@ -30,7 +30,7 @@ foreach ($it in $items) {
 
 /** robocopy argument list for a project copy (exported for tests). */
 function robocopyArgs(src, dst, xd) {
-  const args = [src, dst, '/E', '/COPY:DAT', '/DCOPY:DAT', '/R:1', '/W:1', '/MT:16', '/XJ', '/NP'];
+  const args = [src, dst, '/E', '/COPY:DAT', '/DCOPY:DAT', '/R:1', '/W:1', '/MT:16', '/XJ', '/XJF', '/XJD', '/NP'];
   if (xd.length) args.push('/XD', ...xd);
   return args;
 }

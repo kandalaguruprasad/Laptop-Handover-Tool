@@ -49,6 +49,7 @@ export function Execute({ state, version }: { state: AppState; version: number }
   const ignore = plan?.sum.ignore;
   const needWord = !!plan?.requiresDelete;
   const canRun = !!plan && !plan.blockers.length && !stale && reviewed && (!needWord || word === 'DELETE') && !running && state.mode !== 'readonly';
+  const remaining = run && run.totalOps > 0 ? run.totalOps - run.doneOps - run.errorCount : plan ? plan.opCount : 0;
   const hasRun = !!run && (run.phase !== 'idle' || run.doneOps > 0 || run.errorCount > 0);
 
   return (
@@ -129,7 +130,10 @@ export function Execute({ state, version }: { state: AppState; version: number }
             </div>
           </section>
 
-          {!running && (
+          {!running && remaining <= 0 && (
+            <div className="card text-sm text-zinc-300">Nothing left to run in this plan. Re-scan, tag again and build a new plan for more. Remember to empty the Recycle Bin when you are completely done.</div>
+          )}
+          {!running && remaining > 0 && (
             <section className="card space-y-3 border-red-900/50">
               <h3 className="font-semibold">Confirm</h3>
               <label className="flex items-start gap-2">
