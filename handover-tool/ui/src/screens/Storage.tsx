@@ -33,6 +33,9 @@ export function Storage({ state, version, refresh }: { state: AppState; version:
   useEffect(() => { api<{ drives: Drive[] }>('/api/drives').then((r) => setDrives(r.drives)).catch(() => {}); }, []);
   useEffect(() => { if (state.summary.scanned) api('/api/storage').then(setStorage).catch(() => {}); }, [version, state.summary.scanned]);
 
+  const norm = (a: string[]) => a.map((x) => x.toLowerCase().replace(/[\\/]+$/, '')).sort().join('|');
+  const lastRoots: string[] | null = state.summary.meta?.roots || null;
+  const rootsChanged = !scan.running && (!lastRoots || norm(lastRoots) !== norm(state.settings.scanRoots));
   const dest = state.settings.destDisk.toLowerCase();
   const isDest = (d: Drive) => !!dest && dest.startsWith(d.path.toLowerCase().replace(/[\\/]+$/, '')) && d.path.length > 1;
   const external = drives.filter((d) => isDest(d) || d.removable);
@@ -51,6 +54,11 @@ export function Storage({ state, version, refresh }: { state: AppState; version:
           {scan.running && <button className="btn" onClick={() => api('/api/scan/cancel', { body: {} })}>Cancel</button>}
           <span className="text-xs text-zinc-500">Metadata only — file contents are never read. Re-scans keep your tags.</span>
         </div>
+        {rootsChanged && (
+          <div className="mt-2 rounded border border-amber-600 bg-amber-500/10 p-2 text-sm text-amber-300">
+            {lastRoots ? 'The scan roots changed since the last scan, so everything below (item counts, cloud folders, Review list) still shows the OLD scan.' : 'No scan has been run yet.'} Click <b>{state.summary.scanned ? 'Re-scan' : 'Start scan'}</b>.
+          </div>
+        )}
         <div className="mt-2 text-xs text-zinc-400">Roots: {state.settings.scanRoots.join('  ·  ') || '(none — add some in Settings)'}</div>
         {scan.stats && (
           <div className="mt-3 text-sm text-zinc-300">
@@ -91,7 +99,7 @@ export function Storage({ state, version, refresh }: { state: AppState; version:
                 <span className="text-xs text-zinc-400">cloud-synced folder</span>
               </div>
               <div className="mt-1 text-xs text-zinc-400">
-                {c.covered ? `In scan: ${c.files.toLocaleString()} items · ${fmtBytes(c.bytes)} (after last scan)` : 'Not in the scan yet.'}
+                {c.covered ? (rootsChanged ? 'Covered by your scan roots, but not scanned yet — click Re-scan.' : `In scan: ${c.files.toLocaleString()} items · ${fmtBytes(c.bytes)}`) : 'Not in the scan yet.'}
               </div>
               {!c.covered && <button className="btn mt-2 text-xs" onClick={() => addRoot(c.path)}>+ Add to scan</button>}
               <div className="mt-2 text-xs text-amber-300/80">Moving or deleting files here syncs to the cloud (and online-only files get downloaded to copy them). Review carefully.</div>

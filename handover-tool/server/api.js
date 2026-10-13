@@ -48,7 +48,7 @@ function createApi(app) {
 
   route('GET', '/api/profile-folders', async (req, res) => {
     let dirs = [];
-    try { dirs = fs.readdirSync(app.settings.profileRoot, { withFileTypes: true }).filter((e) => e.isDirectory() && !e.isSymbolicLink()).map((e) => path.join(app.settings.profileRoot, e.name)); } catch { /* none */ }
+    try { dirs = fs.readdirSync(app.settings.profileRoot, { withFileTypes: true }).filter((e) => e.isDirectory() && !e.isSymbolicLink() && !e.name.startsWith('.') && e.name.toLowerCase() !== 'appdata').map((e) => path.join(app.settings.profileRoot, e.name)); } catch { /* none */ }
     json(res, { dirs });
   });
 
