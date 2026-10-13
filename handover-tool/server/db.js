@@ -88,6 +88,21 @@ class DB {
     this.saveTagsNow();
   }
 
+  /** Drop items by path (after a run moved/deleted them) and persist; ids are re-assigned. */
+  removePaths(paths) {
+    const keys = new Set([...paths].map((p) => key(p)));
+    const rows = [];
+    for (const it of this.items) {
+      if (keys.has(key(it.p))) { delete this.tags[it.p]; continue; }
+      rows.push(it.kind === 'f' ? ['f', it.p, it.s, it.m] : ['p', { p: it.p, s: it.s, m: it.m, fc: it.fc, stack: it.stack, regen: it.regen, hasGit: it.hasGit, git: it.git }]);
+    }
+    this._ingest(rows);
+    const out = [JSON.stringify(['meta', this.meta])].concat(rows.map((r) => JSON.stringify(r)));
+    fs.writeFileSync(this.scanFile + '.tmp', out.join('\n') + '\n');
+    fs.renameSync(this.scanFile + '.tmp', this.scanFile);
+    this.saveTagsNow();
+  }
+
   saveTagsSoon() {
     if (this._saveTimer) return;
     this._saveTimer = setTimeout(() => { this._saveTimer = null; try { this.saveTagsNow(); } catch (e) { console.error('tag save failed', e.message); } }, 400);
