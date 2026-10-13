@@ -178,6 +178,30 @@ function createDiskService(app) {
     return results;
   }
 
+  // ---- background cleanup job (long deletes must not block an HTTP request or hide their progress) ----
+  let job = null;
+  const jobView = () => job && { phase: job.phase, total: job.total, done: job.done, ok: job.ok, failed: job.failed, freed: job.freed, current: job.current, startedAt: job.startedAt, finishedAt: job.finishedAt || 0,
+    permanent: job.permanent, errors: job.errors.slice(0, 50), cancelled: job.cancelled };
+  function startClean(paths, { permanent }) {
+    if (job && job.phase === 'running') throw new Error('A cleanup is already running.');
+    job = { phase: 'running', total: paths.length, done: 0, ok: 0, failed: 0, freed: 0, current: '', startedAt: Date.now(), permanent: !!permanent, errors: [], cancelled: false };
+    const j = job; let last = 0; let next = 0;
+    const push = (force) => { const now = Date.now(); if (!force && now - last < 300) return; last = now; app.broadcast({ type: 'disk-clean', state: jobView() }); };
+    const worker = async () => {
+      while (next < paths.length && !j.cancelled) {
+        const p = paths[next++]; j.current = p; push();
+        const [r] = await remove([p], { permanent });
+        j.done++;
+        if (r.ok) { j.ok++; j.freed += r.bytes || 0; } else { j.failed++; j.errors.push({ path: r.path, error: r.error }); }
+        push();
+      }
+    };
+    Promise.all([worker(), worker(), worker()]).catch((e) => { j.errors.push({ path: '', error: String(e.message || e) }); })
+      .finally(() => { j.phase = j.cancelled ? 'cancelled' : 'finished'; j.current = ''; j.finishedAt = Date.now(); push(true); app.broadcast({ type: 'disk-changed' }); });
+    push(true);
+    return true;
+  }
+
   async function emptyRecycleBin() {
     if (!app.guard.destructiveEnabled) throw new GuardError('Read-only mode: restart with --live (or --sandbox).');
     const e = env(); const t = T(); const idx = t ? idxOf(e.recycle) : -1; const bytes = idx >= 0 ? t.total[idx] : 0;
@@ -191,7 +215,7 @@ function createDiskService(app) {
     return { freed: bytes };
   }
 
-  return { start, cancel, state, list, topFiles, categories, quickWins, remove, emptyRecycleBin, scanView, isScanned: () => !!st.tree };
+  return { start, cancel, state, list, topFiles, categories, quickWins, remove, startClean, cleanView: jobView, cancelClean: () => { if (job) job.cancelled = true; }, emptyRecycleBin, scanView, isScanned: () => !!st.tree };
 }
 
 module.exports = { createDiskService, TYPE_GROUPS };

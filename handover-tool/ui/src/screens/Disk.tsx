@@ -1,4 +1,4 @@
-import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
+import { Fragment, createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { api, useEvents } from '../api';
 import type { AppState } from '../types';
 import { Donut, topSlices } from '../components/Donut';
@@ -19,6 +19,8 @@ const V: Record<Verdict, [string, string, string]> = {
   keep: ['Needed by programs', 'bg-sky-500/20 text-sky-300 border-sky-500/50', 'Programs or settings rely on it'],
   system: ['Windows system', 'bg-red-500/20 text-red-300 border-red-500/50', 'Part of Windows: do not touch'],
 };
+interface CleanJob { phase: string; total: number; done: number; ok: number; failed: number; freed: number; current: string; startedAt: number; finishedAt: number; permanent: boolean; errors: { path: string; error: string }[]; cancelled: boolean }
+const CleanCtx = createContext<{ start: (paths: string[], permanent: boolean, word: string) => Promise<void>; running: boolean }>({ start: async () => {}, running: false });
 const Chip = ({ v }: { v: Verdict }) => <span title={V[v][2]} className={`whitespace-nowrap rounded border px-1.5 py-0.5 text-xs ${V[v][1]}`}>{V[v][0]}</span>;
 
 export function Disk({ state }: { state: AppState; version: number }) {
@@ -32,6 +34,8 @@ export function Disk({ state }: { state: AppState; version: number }) {
   const [top, setTop] = useState<Row[]>([]);
   const [err, setErr] = useState('');
   const [msg, setMsg] = useState('');
+  const [job, setJob] = useState<CleanJob | null>(null);
+  const [dismissed, setDismissed] = useState(0);
 
   const loadState = useCallback(() => api<DiskState>('/api/disk').then(setDs).catch((e) => setErr(e.message)), []);
   const loadScanned = useCallback(async () => {
@@ -44,9 +48,20 @@ export function Disk({ state }: { state: AppState; version: number }) {
   useEffect(() => { loadState(); }, [loadState]);
   useEffect(() => { if (ds?.scanned) loadScanned(); }, [ds?.scanned, ds?.scan.scannedAt, loadScanned]);
   useEffect(() => { if (ds?.scanned && tab === 'browse' && !listing) loadList(cwd || ''); }, [tab, ds?.scanned, listing, cwd, loadList]);
-  useEvents((m) => { if (m.type === 'disk') setDs((d) => (d ? { ...d, scan: m.state, scanned: d.scanned || !!m.state.scannedAt } : d)); });
+  useEvents((m) => {
+    if (m.type === 'disk-clean') setJob(m.state);
+    else if (m.type === 'disk-changed') { loadScanned(); loadState(); }
+    else if (m.type === 'disk') setDs((d) => (d ? { ...d, scan: m.state, scanned: d.scanned || !!m.state.scannedAt } : d));
+  });
   useEffect(() => { if (ds && !ds.scan.running) loadState(); }, [ds?.scan.running]);  // eslint-disable-line react-hooks/exhaustive-deps
 
+  useEffect(() => { api<{ job: CleanJob | null }>('/api/disk/clean').then((r) => { if (r.job) setJob(r.job); }).catch(() => {}); }, []);
+  const startClean = useCallback(async (paths: string[], permanent: boolean, word: string) => {
+    setErr(''); setMsg('');
+    await api('/api/disk/delete', { body: { paths, permanent, word } });
+    api<{ job: CleanJob | null }>('/api/disk/clean').then((r) => setJob(r.job));
+    document.querySelector('main')?.scrollTo({ top: 0, behavior: 'smooth' });
+  }, []);
   const refreshAll = async () => { await loadState(); await loadScanned(); if (tab === 'browse') await loadList(cwd); };
   const scan = () => { setErr(''); setMsg(''); setListing(null); api('/api/disk/scan', { body: {} }).then(loadState); };
   const drill = (p: string) => { setTab('browse'); loadList(p); };
@@ -55,8 +70,16 @@ export function Disk({ state }: { state: AppState; version: number }) {
   const pctUsed = d && d.total ? Math.round((d.used / d.total) * 100) : 0;
   const running = ds?.scan.running;
 
+  const cleaning = job?.phase === 'running';
   return (
+    <CleanCtx.Provider value={{ start: startClean, running: !!cleaning }}>
     <div className="mx-auto max-w-6xl space-y-5 p-4">
+      {(msg || (job && (cleaning || job.startedAt !== dismissed))) && (
+        <div className="sticky top-0 z-20 space-y-2">
+          {job && (cleaning || job.startedAt !== dismissed) && <CleanPanel job={job} onDismiss={() => setDismissed(job.startedAt)} />}
+          {msg && <div className="flex items-start justify-between rounded border border-green-700 bg-zinc-950 p-3 text-sm text-green-300">{msg}<button className="ml-3 underline" onClick={() => setMsg('')}>dismiss</button></div>}
+        </div>
+      )}
       <div className="flex flex-wrap items-center gap-3">
         <h2 className="text-lg font-semibold">C Drive</h2>
         <button className="btn btn-primary" disabled={running} onClick={scan}>{ds?.scanned ? 'Re-scan the drive' : 'Scan the whole drive'}</button>
@@ -64,7 +87,6 @@ export function Disk({ state }: { state: AppState; version: number }) {
         <span className="text-xs text-zinc-500">Read-only analysis: sizes only, nothing is opened or changed. Cleaning only happens when you tick items and confirm.</span>
       </div>
       {err && <div className="rounded border border-red-700 p-3 text-red-300">{err}</div>}
-      {msg && <div className="rounded border border-green-700 p-3 text-sm text-green-300">{msg}</div>}
 
       {d && (
         <section className="card">
@@ -139,6 +161,27 @@ export function Disk({ state }: { state: AppState; version: number }) {
         </>
       )}
     </div>
+    </CleanCtx.Provider>
+  );
+}
+
+function CleanPanel({ job, onDismiss }: { job: CleanJob; onDismiss: () => void }) {
+  const running = job.phase === 'running';
+  const pct = job.total ? Math.round((job.done / job.total) * 100) : 0;
+  return (
+    <div className={`rounded border bg-zinc-950 p-3 text-sm shadow-lg ${running ? 'border-sky-500' : job.failed ? 'border-amber-500' : 'border-green-600'}`}>
+      <div className="flex flex-wrap items-center gap-3">
+        <b>{running ? '🧹 Cleaning in progress…' : job.cancelled ? 'Cleanup cancelled' : '✅ Cleanup finished'}</b>
+        <span>{job.done}/{job.total} locations · freed about <b>{fmtBytes(job.freed)}</b>{job.failed > 0 && <span className="text-amber-300"> · {job.failed} could not be removed</span>}</span>
+        {running ? <button className="btn ml-auto" onClick={() => api('/api/disk/clean/cancel', { body: {} })}>Stop</button> : <button className="btn ml-auto" onClick={onDismiss}>Dismiss</button>}
+      </div>
+      <div className="mt-2 h-2 overflow-hidden rounded bg-zinc-800"><div className={`h-full transition-all ${running ? 'bg-sky-500' : 'bg-green-500'}`} style={{ width: `${pct}%` }} /></div>
+      {running && <div className="mt-1 truncate text-xs text-zinc-500">Now: {job.current || '…'}</div>}
+      {!running && job.errors.length > 0 && (
+        <details className="mt-2 text-xs text-zinc-400"><summary className="cursor-pointer text-amber-300">Why some could not be removed (usually files in use or needing administrator rights)</summary>
+          <div className="max-h-40 overflow-auto">{job.errors.map((e, i) => <div key={i} className="break-all">{e.path} — {e.error}</div>)}</div></details>
+      )}
+    </div>
   );
 }
 
@@ -195,6 +238,7 @@ function RowTable({ rows, total, onOpenDir, onDone, mode, showPath }: { rows: Ro
 }
 
 function CleanBar({ paths, bytes, allSafe, onDone, mode }: { paths: string[]; bytes: number; allSafe: boolean; onDone: (m: string) => void; mode: string }) {
+  const ctx = useContext(CleanCtx);
   const [word, setWord] = useState('');
   const [perm, setPerm] = useState<boolean | null>(null);
   const [busy, setBusy] = useState(false);
@@ -203,18 +247,14 @@ function CleanBar({ paths, bytes, allSafe, onDone, mode }: { paths: string[]; by
   const permanent = perm ?? allSafe;
   const run = async () => {
     setBusy(true); setErr('');
-    try {
-      const r = await api<{ results: { ok: boolean; path: string; error?: string; bytes: number }[] }>('/api/disk/delete', { body: { paths, word, permanent } });
-      const ok = r.results.filter((x) => x.ok); const bad = r.results.filter((x) => !x.ok);
-      setWord(''); onDone(`Removed ${ok.length} item(s) (${fmtBytes(ok.reduce((a, x) => a + (x.bytes || 0), 0))}).${bad.length ? ` ${bad.length} could not be removed: ${bad.map((b) => `${b.path.split(/[\\/]/).pop()} (${b.error})`).join('; ')}` : ''}`);
-    } catch (e: any) { setErr(e.message); } finally { setBusy(false); }
+    try { await ctx.start(paths, permanent, word); setWord(''); onDone(''); } catch (e: any) { setErr(e.message); } finally { setBusy(false); }
   };
   return (
     <div className="flex flex-wrap items-center gap-3 border-t border-zinc-800 pt-3 text-sm">
       <span>{paths.length} selected · {fmtBytes(bytes)}</span>
       <label className="flex items-center gap-1 text-xs"><input type="checkbox" checked={permanent} onChange={(e) => setPerm(e.target.checked)} /> delete permanently (skip Recycle Bin)</label>
       <input className="input w-32" placeholder="type DELETE" value={word} onChange={(e) => setWord(e.target.value)} />
-      <button className="btn btn-danger" disabled={word !== 'DELETE' || busy || mode === 'readonly'} onClick={run}>{permanent ? 'Delete permanently' : 'Move to Recycle Bin'}</button>
+      <button className="btn btn-danger" disabled={word !== 'DELETE' || busy || ctx.running || mode === 'readonly'} onClick={run}>{busy ? 'Starting…' : ctx.running ? 'A cleanup is running…' : permanent ? 'Delete permanently' : 'Move to Recycle Bin'}</button>
       {err && <span className="text-red-400">{err}</span>}
       {!allSafe && <span className="text-xs text-amber-300">Includes items rated “Your call”: make sure you do not need them.</span>}
     </div>
@@ -222,6 +262,9 @@ function CleanBar({ paths, bytes, allSafe, onDone, mode }: { paths: string[]; by
 }
 
 function QuickWins({ items, onDone, mode }: { items: Quick[]; onDone: (m: string) => void; mode: string }) {
+  const ctx = useContext(CleanCtx);
+  const [busy, setBusy] = useState(false);
+  const [binBusy, setBinBusy] = useState(false);
   const [sel, setSel] = useState<Set<string>>(new Set());
   const [word, setWord] = useState('');
   const [binWord, setBinWord] = useState('');
@@ -234,14 +277,13 @@ function QuickWins({ items, onDone, mode }: { items: Quick[]; onDone: (m: string
   const bytes = chosen.reduce((a, i) => a + i.paths.filter((p) => p.deletable).reduce((x, p) => x + p.bytes, 0), 0);
   const toggle = (g: string) => setSel((s) => { const n = new Set(s); if (n.has(g)) n.delete(g); else n.add(g); return n; });
   const run = async () => {
-    setErr('');
-    try {
-      const r = await api<{ results: { ok: boolean; bytes: number; error?: string }[] }>('/api/disk/delete', { body: { paths, word, permanent: true } });
-      const ok = r.results.filter((x) => x.ok); setSel(new Set()); setWord('');
-      onDone(`Cleaned ${ok.length} location(s), freed about ${fmtBytes(ok.reduce((a, x) => a + (x.bytes || 0), 0))}.${r.results.length > ok.length ? ` ${r.results.length - ok.length} could not be cleaned (files in use or permission needed).` : ''}`);
-    } catch (e: any) { setErr(e.message); }
+    setErr(''); setBusy(true);
+    try { await ctx.start(paths, true, word); setSel(new Set()); setWord(''); } catch (e: any) { setErr(e.message); } finally { setBusy(false); }
   };
-  const emptyBin = async () => { setErr(''); try { const r = await api<{ freed: number }>('/api/disk/empty-bin', { body: { word: binWord } }); setBinWord(''); onDone(`Recycle Bin emptied (about ${fmtBytes(r.freed)} freed).`); } catch (e: any) { setErr(e.message); } };
+  const emptyBin = async () => {
+    setErr(''); setBinBusy(true);
+    try { const r = await api<{ freed: number }>('/api/disk/empty-bin', { body: { word: binWord } }); setBinWord(''); onDone(`✅ Recycle Bin emptied (about ${fmtBytes(r.freed)} freed).`); document.querySelector('main')?.scrollTo({ top: 0, behavior: 'smooth' }); } catch (e: any) { setErr(e.message); } finally { setBinBusy(false); }
+  };
   if (!items.length) return null;
   return (
     <section className="card space-y-3">
@@ -251,7 +293,7 @@ function QuickWins({ items, onDone, mode }: { items: Quick[]; onDone: (m: string
         <div className="rounded border border-green-500/40 p-3 text-sm">
           <div className="flex flex-wrap items-center gap-3"><b>🗑️ Recycle Bin</b> <span>{fmtBytes(bin.bytes)} (your account's part that the scan can read)</span> <Chip v="safe" />
             <input className="input w-28" placeholder="type EMPTY" value={binWord} onChange={(e) => setBinWord(e.target.value)} />
-            <button className="btn btn-danger" disabled={binWord !== 'EMPTY' || mode === 'readonly'} onClick={emptyBin}>Empty Recycle Bin</button></div>
+            <button className="btn btn-danger" disabled={binWord !== 'EMPTY' || binBusy || mode === 'readonly'} onClick={emptyBin}>{binBusy ? 'Emptying… please wait' : 'Empty Recycle Bin'}</button></div>
           <div className="mt-1 text-xs text-zinc-400">{bin.why}</div>
         </div>
       )}
@@ -269,7 +311,7 @@ function QuickWins({ items, onDone, mode }: { items: Quick[]; onDone: (m: string
       <div className="flex flex-wrap items-center gap-3 border-t border-zinc-800 pt-3 text-sm">
         <span>{chosen.length} group(s) selected · about {fmtBytes(bytes)}</span>
         <input className="input w-32" placeholder="type DELETE" value={word} onChange={(e) => setWord(e.target.value)} />
-        <button className="btn btn-danger" disabled={!paths.length || word !== 'DELETE' || mode === 'readonly'} onClick={run}>Clean selected (permanent)</button>
+        <button className="btn btn-danger" disabled={!paths.length || word !== 'DELETE' || busy || ctx.running || mode === 'readonly'} onClick={run}>{busy ? 'Starting…' : ctx.running ? 'A cleanup is running…' : 'Clean selected (permanent)'}</button>
         {err && <span className="text-red-400">{err}</span>}
         <span className="text-xs text-zinc-500">Close your browser and other programs first, otherwise their cache files in use are skipped.</span>
       </div>

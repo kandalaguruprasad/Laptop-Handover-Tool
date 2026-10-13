@@ -56,8 +56,11 @@ function register({ app, route, json, readBody }) {
     if (needLive(res) || execBusy(res)) return;
     if (b.word !== 'DELETE') return json(res, { error: 'Type DELETE to confirm.' }, 400);
     if (!Array.isArray(b.paths) || !b.paths.length) return json(res, { error: 'Nothing selected.' }, 400);
-    json(res, { results: await disk.remove(b.paths.slice(0, 500).map(String), { permanent: !!b.permanent }) });
+    try { disk.startClean(b.paths.slice(0, 5000).map(String), { permanent: !!b.permanent }); } catch (e) { return json(res, { error: e.message }, 409); }
+    json(res, { started: true });
   });
+  route('GET', '/api/disk/clean', async (req, res) => json(res, { job: disk.cleanView() }));
+  route('POST', '/api/disk/clean/cancel', async (req, res) => { disk.cancelClean(); json(res, { ok: true }); });
   route('POST', '/api/disk/empty-bin', async (req, res) => {
     const b = await readBody(req);
     if (needLive(res) || execBusy(res)) return;

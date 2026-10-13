@@ -17,6 +17,12 @@ function call(app, method, url, body) {
     req.on('error', reject); if (data) req.write(data); req.end();
   });
 }
+async function clean(app, paths, permanent) {
+  const r = await call(app, 'POST', '/api/disk/delete', { word: 'DELETE', permanent, paths });
+  assert.strictEqual(r.status, 200, JSON.stringify(r.body));
+  const job = await waitFor(async () => { const j = (await call(app, 'GET', '/api/disk/clean')).body.job; return j && j.phase !== 'running' && j; });
+  return job;
+}
 const waitFor = async (fn, ms = 30000) => { const t = Date.now(); for (;;) { const v = await fn(); if (v) return v; if (Date.now() - t > ms) throw new Error('timeout'); await new Promise((r) => setTimeout(r, 50)); } };
 function walkSize(dir) { let n = 0; for (const e of fs.readdirSync(dir, { withFileTypes: true })) { const p = path.join(dir, e.name); if (e.isSymbolicLink()) continue; n += e.isDirectory() ? walkSize(p) : fs.statSync(p).size; } return n; }
 
@@ -76,19 +82,19 @@ test('C Drive: scan totals, browse with explanations, quick wins, guarded cleanu
   const tmpFile = path.join(root, 'Windows', 'Temp', 'installer.tmp');
   const sys32 = path.join(root, 'Windows', 'System32', 'kernel.dll');
   assert.strictEqual((await call(app, 'POST', '/api/disk/delete', { paths: [tmpFile] })).status, 400, 'needs DELETE word');
-  const r = (await call(app, 'POST', '/api/disk/delete', { word: 'DELETE', permanent: true, paths: [tmpFile, sys32, path.join(root, 'Windows'), path.join(root, 'profile', '.ssh', 'id_rsa'), path.join(base, 'outside'), root] })).body.results;
-  assert.strictEqual(r[0].ok, true);
-  for (const x of r.slice(1)) assert.strictEqual(x.ok, false, JSON.stringify(x));
+  const job1 = await clean(app, [tmpFile, sys32, path.join(root, 'Windows'), path.join(root, 'profile', '.ssh', 'id_rsa'), path.join(base, 'outside'), root], true);
+  assert.deepStrictEqual([job1.total, job1.done, job1.ok, job1.failed], [6, 6, 1, 5], JSON.stringify(job1));
+  assert.strictEqual(job1.freed, 30000);
   assert.ok(!fs.existsSync(tmpFile) && fs.existsSync(sys32) && fs.existsSync(path.join(root, 'profile', '.ssh', 'id_rsa')));
   // totals shrink without a rescan
   const after = (await call(app, 'GET', '/api/disk')).body;
   assert.strictEqual(before(st.scannedBytes) - after.scannedBytes, 30000);
   // clean a quick-win group (browser cache, permanent) and a user file (to the fake recycle bin)
   const cache = g.browser.paths[0].path;
-  const cr = (await call(app, 'POST', '/api/disk/delete', { word: 'DELETE', permanent: true, paths: [cache] })).body.results[0]; assert.strictEqual(cr.ok, true, JSON.stringify(cr));
+  const cj = await clean(app, [cache], true); assert.strictEqual(cj.ok, 1, JSON.stringify(cj));
   assert.ok(!fs.existsSync(cache));
   const iso = path.join(root, 'profile', 'Downloads', 'big-image.iso');
-  assert.strictEqual((await call(app, 'POST', '/api/disk/delete', { word: 'DELETE', paths: [iso] })).body.results[0].ok, true);
+  assert.strictEqual((await clean(app, [iso], false)).ok, 1);
   assert.ok(fs.readdirSync(path.join(root, '.recycle')).some((n) => n.endsWith('big-image.iso')));
   // empty recycle bin needs EMPTY
   assert.strictEqual((await call(app, 'POST', '/api/disk/empty-bin', {})).status, 400);
