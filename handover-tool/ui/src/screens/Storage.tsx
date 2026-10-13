@@ -101,7 +101,9 @@ export function Storage({ state, version, refresh }: { state: AppState; version:
               <div className="mt-1 text-xs text-zinc-400">
                 {c.covered ? (rootsChanged ? 'Covered by your scan roots, but not scanned yet — click Re-scan.' : `In scan: ${c.files.toLocaleString()} items · ${fmtBytes(c.bytes)}`) : 'Not in the scan yet.'}
               </div>
-              {!c.covered && <button className="btn mt-2 text-xs" onClick={() => addRoot(c.path)}>+ Add to scan</button>}
+              {state.settings.scanRoots.some((r) => r.toLowerCase().replace(/[\\/]+$/, '') === c.path.toLowerCase()) ? (
+                <div className="mt-1 text-xs text-green-400">✓ Scanned as its own root</div>
+              ) : (!c.covered || (c.files === 0 && !rootsChanged)) && <button className="btn mt-2 text-xs" onClick={() => addRoot(c.path)}>+ Add as its own scan root</button>}
               <div className="mt-2 text-xs text-amber-300/80">Moving or deleting files here syncs to the cloud (and online-only files get downloaded to copy them). Review carefully.</div>
             </div>
           ))}

@@ -60,3 +60,17 @@ test('scanner: excludes destination disk and company folder', async (t) => {
   t.after(() => cleanup(base));
   assert.ok(!app.db.items.some((i) => i.p.startsWith(path.join(root, 'external'))));
 });
+
+test('scanner: nested roots are scanned once, explicit nested root works', async (t) => {
+  const { tmpSandbox, cleanup: cl } = require('./helpers');
+  const { createApp } = require('../server/index');
+  const { base, root } = tmpSandbox({ nm: 5 });
+  t.after(() => cl(base));
+  const app = createApp({ sandbox: root, data: path.join(base, 'data') });
+  app.settings.scanRoots = [path.join(root, 'profile'), path.join(root, 'profile', 'OneDrive - Acme')];
+  app.scanner.start();
+  while (app.scanner.state().running) await new Promise((r) => setTimeout(r, 25));
+  const paths = app.db.items.map((i) => i.p);
+  assert.strictEqual(new Set(paths).size, paths.length, 'no item may appear twice');
+  assert.ok(paths.some((p) => p.includes('OneDrive - Acme')));
+});

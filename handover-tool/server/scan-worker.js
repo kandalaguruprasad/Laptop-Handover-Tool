@@ -105,8 +105,9 @@ async function processDir(dir) {
 async function main() {
   // drop roots nested inside other roots
   const uniq = [...new Set(roots.map(norm))].filter((r) => fs.existsSync(r));
-  const top = uniq.filter((r) => !uniq.some((o) => o !== r && isInsideOrSame(r, o) && key(o) !== key(r)));
-  const queue = [...top];
+  // nested roots are kept on purpose: an explicit root (e.g. OneDrive inside C:\\Users) is scanned directly even if the parent walk
+  // skips it; the `visited` set prevents any folder being scanned twice. Shorter paths first so parents claim their children.
+  const queue = uniq.sort((a, b) => a.length - b.length);
   let active = 0;
   await new Promise((resolve) => {
     const pump = () => {
