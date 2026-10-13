@@ -26,6 +26,10 @@ export function Storage({ state, version, refresh }: { state: AppState; version:
   const [drives, setDrives] = useState<Drive[]>([]);
   const [storage, setStorage] = useState<{ categories: Record<string, { n: number; bytes: number }>; largest: { p: string; s: number }[] } | null>(null);
   const scan = state.scan;
+  const [cloud, setCloud] = useState<{ path: string; kind: string; bytes: number; files: number; covered: boolean }[]>([]);
+  const loadCloud = () => api<{ folders: typeof cloud }>('/api/cloud-folders').then((r) => setCloud(r.folders)).catch(() => {});
+  useEffect(() => { loadCloud(); }, [version, state.settings.scanRoots.length]);
+  const addRoot = async (p: string) => { await api('/api/settings', { method: 'PUT', body: { scanRoots: [...state.settings.scanRoots, p] } }); refresh(); loadCloud(); };
   useEffect(() => { api<{ drives: Drive[] }>('/api/drives').then((r) => setDrives(r.drives)).catch(() => {}); }, []);
   useEffect(() => { if (state.summary.scanned) api('/api/storage').then(setStorage).catch(() => {}); }, [version, state.summary.scanned]);
 
@@ -80,6 +84,19 @@ export function Storage({ state, version, refresh }: { state: AppState; version:
           <h2 className="text-lg font-semibold">Laptop drives</h2>
           {laptop.map((d) => <DriveCard key={d.path} d={d} />)}
           {!laptop.length && <div className="text-zinc-500">No drives found.</div>}
+          {cloud.map((c) => (
+            <div key={c.path} className="card">
+              <div className="flex items-baseline justify-between">
+                <div className="font-medium">☁️ {c.kind} <span className="text-xs text-zinc-500">{c.path}</span></div>
+                <span className="text-xs text-zinc-400">cloud-synced folder</span>
+              </div>
+              <div className="mt-1 text-xs text-zinc-400">
+                {c.covered ? `In scan: ${c.files.toLocaleString()} items · ${fmtBytes(c.bytes)} (after last scan)` : 'Not in the scan yet.'}
+              </div>
+              {!c.covered && <button className="btn mt-2 text-xs" onClick={() => addRoot(c.path)}>+ Add to scan</button>}
+              <div className="mt-2 text-xs text-amber-300/80">Moving or deleting files here syncs to the cloud (and online-only files get downloaded to copy them). Review carefully.</div>
+            </div>
+          ))}
         </div>
         <div className="space-y-3">
           <h2 className="text-lg font-semibold">External / destination</h2>

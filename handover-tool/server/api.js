@@ -6,6 +6,7 @@ const { listDrives } = require('./drives');
 const { findDuplicates, markDuplicatesIgnore } = require('./dupes');
 const { TAGS } = require('./db');
 const { writeJsonAtomic } = require('./jsonfile');
+const { norm, isInsideOrSame } = require('./platform');
 
 const IMG_MIME = { jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', gif: 'image/gif', bmp: 'image/bmp', webp: 'image/webp', svg: 'image/svg+xml', ico: 'image/x-icon' };
 const MAX_THUMB = 25 * 1024 * 1024;
@@ -62,6 +63,32 @@ function createApi(app) {
         .map((e) => path.join(base, e.name));
     } catch { /* unreadable */ }
     json(res, { dirs });
+  });
+
+  // cloud-synced folders (Dropbox / OneDrive / Google Drive ...) living on the laptop
+  route('GET', '/api/cloud-folders', async (req, res) => {
+    const found = new Map();
+    const add = (p, kind) => { if (p && fs.existsSync(p)) found.set(norm(p).toLowerCase(), { path: norm(p), kind }); };
+    const prof = app.settings.profileRoot;
+    try {
+      for (const e of fs.readdirSync(prof, { withFileTypes: true })) {
+        if (!e.isDirectory()) continue;
+        const m = /^(onedrive|dropbox|google ?drive|icloud|box)/i.exec(e.name);
+        if (m) add(path.join(prof, e.name), m[1].toLowerCase().startsWith('one') ? 'OneDrive' : m[1].toLowerCase().startsWith('drop') ? 'Dropbox' : m[1].toLowerCase().startsWith('google') ? 'Google Drive' : m[1]);
+      }
+    } catch { /* no profile */ }
+    for (const k of ['OneDrive', 'OneDriveConsumer', 'OneDriveCommercial']) add(process.env[k], 'OneDrive');
+    for (const base of [process.env.APPDATA, process.env.LOCALAPPDATA]) { // Dropbox may be in a custom location
+      try { const j = JSON.parse(fs.readFileSync(path.join(base || '', 'Dropbox', 'info.json'), 'utf8')); for (const v of Object.values(j)) add(v && v.path, 'Dropbox'); } catch { /* not installed */ }
+    }
+    const roots = app.settings.scanRoots.map((r) => norm(r));
+    const out = [...found.values()].map((f) => {
+      let bytes = 0; let files = 0;
+      for (const it of app.db.items) if (isInsideOrSame(it.p, f.path)) { bytes += it.s; files++; }
+      const covered = roots.some((r) => isInsideOrSame(f.path, r));
+      return { ...f, bytes, files, covered };
+    });
+    json(res, { folders: out });
   });
 
   route('GET', '/api/drives', async (req, res) => json(res, { drives: await listDrives() }));
