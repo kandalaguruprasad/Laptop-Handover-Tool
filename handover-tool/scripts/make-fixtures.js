@@ -121,6 +121,19 @@ function makeFixtures(root, opts = {}) {
     w(path.join(root, 'Company_Handover', n, 'src', 'index.js'), `// ${base}`);
   }
   w(path.join(root, 'Company_Handover', 'Files', 'loose.txt'), 'x');
+  // C-drive analyser: Windows-like system areas, caches, temp, big files
+  w(path.join(root, 'Windows', 'System32', 'kernel.dll'), bytes(60000, 41));
+  w(path.join(root, 'Windows', 'WinSxS', 'comp', 'big.dll'), bytes(80000, 42));
+  w(path.join(root, 'Windows', 'Temp', 'installer.tmp'), bytes(30000, 43));
+  w(path.join(root, 'Windows', 'SoftwareDistribution', 'Download', 'update.cab'), bytes(50000, 44));
+  w(path.join(root, 'hiberfil.sys'), bytes(120000, 45));
+  w(path.join(root, 'pagefile.sys'), bytes(90000, 46));
+  w(path.join(P, 'AppData', 'Local', 'Temp', 'scratch.tmp'), bytes(20000, 47));
+  w(path.join(P, 'AppData', 'Local', 'Google', 'Chrome', 'User Data', 'Default', 'Cache', 'data_0'), bytes(40000, 48));
+  w(path.join(P, 'AppData', 'Local', 'Microsoft', 'Windows', 'INetCache', 'x.bin'), bytes(10000, 49));
+  w(path.join(P, '.ssh', 'id_rsa'), 'secret');
+  w(path.join(root, 'Projects', 'webapp', 'node_modules', 'dep', 'index.js'), bytes(15000, 50));
+  w(path.join(P, 'Downloads', 'big-image.iso'), bytes(6 * 1024 * 1024, 51));
   // external "hard disk"
   fs.mkdirSync(path.join(root, 'external'), { recursive: true });
   return { root, profile: P, external: path.join(root, 'external') };

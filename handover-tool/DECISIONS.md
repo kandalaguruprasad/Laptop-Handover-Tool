@@ -46,6 +46,11 @@ Where the spec was silent I picked the simplest safe option. Everything here was
 - Downloaded installers: top-level entries of Downloads (files and whole folders) with size, installer count and a 'contains a project' warning; delete goes to the Recycle Bin.
 - Company Groups: look-alike names (copy, final, v2, (2), hash suffixes…) are clustered; you choose group or keep-normal; moves are renames inside the company folder only; each group gets a `.handover-group.json` marker; the last grouping can be undone.
 
+## C Drive tab
+- Separate whole-drive analysis (worker thread, metadata only): only folders are kept in memory, plus the 300 largest files and per-extension totals. Hard-linked files (WinSxS) are counted once. Symlinks/junctions are skipped. Cloud-synced folders (OneDrive/Dropbox…) are listed but not counted because online-only files use no disk space. Space Windows hides (System Volume Information, other users, restore points) shows up as 'not accounted for'.
+- `diskknow.js` rates every path: safe / your call / needed by programs / Windows system, with a plain-language reason. Anything under Windows, Program Files, ProgramData, other users, .ssh/.aws, AppData roots, Microsoft/Packages data, the profile root and the drive root is never deletable (a few Windows subfolders such as Temp contents and Update downloads are). Deleting needs DELETE typed; safe items default to permanent delete, 'your call' items default to the Recycle Bin. Empty Recycle Bin needs EMPTY.
+- Quick wins aggregate Recycle Bin, temp, Windows Update downloads, crash dumps, thumbnail/web cache, browser caches, developer caches and every node_modules/.venv/__pycache__ on the drive.
+
 ## Known limits (not tested on real Windows in this environment)
 - The Windows-only code paths (robocopy, PowerShell Recycle Bin, drive listing via CIM) were written to spec but could only be exercised via Node fallbacks on Linux. Run `sandbox.bat` on the laptop first; it uses the real robocopy/PowerShell code against the fake tree.
 - Paths over 260 chars: Node file APIs use `\\?\`, robocopy handles them natively, but the PowerShell Recycle Bin call may fail for them; those items show up in the error list rather than being deleted.

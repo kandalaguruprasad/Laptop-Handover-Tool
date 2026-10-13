@@ -2,6 +2,7 @@
 // Routes for the two extra tabs: Apps (uninstall / leftovers / downloaded installers) and Company Groups.
 const { createAppsService } = require('./apps');
 const { createGroupsService } = require('./groups');
+const { createDiskService } = require('./disk');
 
 function register({ app, route, json, readBody }) {
   const apps = createAppsService(app);
@@ -37,6 +38,31 @@ function register({ app, route, json, readBody }) {
     if (b.word !== 'DELETE') return json(res, { error: 'Type DELETE to confirm.' }, 400);
     const results = await apps.deleteInstallers(Array.isArray(b.ids) ? b.ids.map(String) : [], { permanent: !!(b.permanent || app.settings.permanentDelete) });
     json(res, { results, installers: apps.installers() });
+  });
+
+  // ---------------- C Drive ----------------
+  const disk = createDiskService(app);
+  app.diskService = disk;
+  const wrap = (fn) => async (req, res, url) => { try { json(res, await fn(req, res, url)); } catch (e) { json(res, { error: String(e.message || e) }, 400); } };
+  route('GET', '/api/disk', wrap(async () => disk.state()));
+  route('POST', '/api/disk/scan', async (req, res) => json(res, { started: disk.start() }));
+  route('POST', '/api/disk/cancel', async (req, res) => { disk.cancel(); json(res, { ok: true }); });
+  route('GET', '/api/disk/list', wrap(async (req, res, url) => disk.list(url.searchParams.get('path') || '')));
+  route('GET', '/api/disk/top', wrap(async () => ({ files: disk.topFiles() })));
+  route('GET', '/api/disk/categories', wrap(async () => ({ categories: disk.categories() })));
+  route('GET', '/api/disk/quick', wrap(async () => ({ items: disk.quickWins() })));
+  route('POST', '/api/disk/delete', async (req, res) => {
+    const b = await readBody(req);
+    if (needLive(res) || execBusy(res)) return;
+    if (b.word !== 'DELETE') return json(res, { error: 'Type DELETE to confirm.' }, 400);
+    if (!Array.isArray(b.paths) || !b.paths.length) return json(res, { error: 'Nothing selected.' }, 400);
+    json(res, { results: await disk.remove(b.paths.slice(0, 500).map(String), { permanent: !!b.permanent }) });
+  });
+  route('POST', '/api/disk/empty-bin', async (req, res) => {
+    const b = await readBody(req);
+    if (needLive(res) || execBusy(res)) return;
+    if (b.word !== 'EMPTY') return json(res, { error: 'Type EMPTY to confirm.' }, 400);
+    try { json(res, await disk.emptyRecycleBin()); } catch (e) { json(res, { error: String(e.message || e) }, 400); }
   });
 
   // ---------------- Company Groups ----------------

@@ -188,7 +188,7 @@ class FsOps {
       return Promise.all(items.map(async (it, i) => {
         try {
           const dest = path.join(bin, `${Date.now()}-${i}-${Math.random().toString(36).slice(2, 6)}-${path.basename(it.p)}`);
-          this.guard.assertWritable(dest);
+          (this.guard.assertRecycleDest || this.guard.assertWritable).call(this.guard, dest); // the fake bin is a destination, not a source
           await fs.promises.rename(it.p, dest);
           return { p: it.p, ok: true };
         } catch (e) { return { p: it.p, ok: false, error: e.message }; }

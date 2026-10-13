@@ -7,9 +7,10 @@ import { Settings } from './screens/Settings';
 import { Execute } from './screens/Execute';
 import { Apps } from './screens/Apps';
 import { Groups } from './screens/Groups';
+import { Disk } from './screens/Disk';
 import { SummaryBar } from './components/SummaryBar';
 
-const SCREENS = ['Storage', 'Review', 'Execute', 'Apps', 'Company Groups', 'Settings'] as const;
+const SCREENS = ['Storage', 'Review', 'Execute', 'Apps', 'Company Groups', 'C Drive', 'Settings'] as const;
 type Screen = (typeof SCREENS)[number];
 
 export function App() {
@@ -52,6 +53,7 @@ export function App() {
         {screen === 'Execute' && <Execute state={state} version={version} />}
         {screen === 'Apps' && <Apps state={state} version={version} />}
         {screen === 'Company Groups' && <Groups state={state} version={version} />}
+        {screen === 'C Drive' && <Disk state={state} version={version} />}
         {screen === 'Settings' && <Settings state={state} refresh={refresh} />}
       </main>
     </div>

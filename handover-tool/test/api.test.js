@@ -106,6 +106,6 @@ test('HTTP: group-header tagging touches only that group (direct children within
   assert.strictEqual(all.count, 12, 'nothing else (other tabs, parent/sibling folders) was tagged');
   // a group header must not reach into other tabs even when they share the folder
   const g2 = await call(app, 'POST', '/api/tag', { group: path.join(root, 'profile', 'Downloads'), filter: { tab: 'installers' }, tag: 'mine' });
-  assert.strictEqual(g2.body.changed, 2);
+  assert.strictEqual(g2.body.changed, 3); // setup.exe, tool.msi, big-image.iso
   assert.strictEqual((await call(app, 'GET', '/api/items?tab=documents&tag=mine')).body.count, 0);
 });
