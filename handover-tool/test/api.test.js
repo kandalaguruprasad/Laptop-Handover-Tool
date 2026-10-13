@@ -49,7 +49,7 @@ test('HTTP: token required, loopback host only, confirm gates, full run via work
   const run = () => call(app, 'POST', '/api/run/start', { confirm: true, deleteWord: 'DELETE' });
   assert.strictEqual((await run()).status, 400, 'no plan yet');
   const plan = (await call(app, 'POST', '/api/plan/build', {})).body;
-  assert.strictEqual(plan.sum.ignore.items, 2);
+  assert.strictEqual(plan.sum.ignore.items, ign.length);
   assert.deepStrictEqual(plan.blockers, []);
   assert.strictEqual((await call(app, 'POST', '/api/run/start', {})).status, 400, 'confirm required');
   assert.strictEqual((await call(app, 'POST', '/api/run/start', { confirm: true })).status, 400, 'DELETE word required');

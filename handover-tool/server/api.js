@@ -217,6 +217,7 @@ function createApi(app) {
     req.on('close', () => { clearInterval(ka); app.clients.delete(res); });
   });
 
+  try { require('./api-tools').register(ctx); } catch (e) { if (e.code !== 'MODULE_NOT_FOUND') throw e; }
   try { require('./api-exec').register(ctx); } catch (e) { if (e.code !== 'MODULE_NOT_FOUND') throw e; }
 
   return {

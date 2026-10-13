@@ -94,6 +94,33 @@ function makeFixtures(root, opts = {}) {
   // AppData must never be scanned, even when it contains projects
   w(D('AppData', 'Local', 'Tool', 'data.bin'), 'x');
   makeProject(D('AppData', 'Local', 'Android', 'Sdk', 'python-packages', 'adb'), { realGit: false });
+  // fake installed programs for the Apps tab (sandbox backend reads _apps.json)
+  w(path.join(root, 'Program Files', 'FakeApp', 'bin', 'fake.exe'), 'x');
+  w(path.join(root, 'Program Files', 'OtherApp', 'other.exe'), 'x');
+  w(path.join(root, 'Program Files', 'StubbornApp', 'stubborn.exe'), 'x');
+  w(path.join(P, 'AppData', 'Local', 'FakeApp', 'cache', 'blob.bin'), bytes(5000, 2));
+  w(path.join(P, 'AppData', 'Roaming', 'FakeApp', 'settings.json'), '{}');
+  w(path.join(P, 'AppData', 'Local', 'Acme', 'FakeApp', 'state.db'), 'x');       // publisher\\name -> "guess"
+  w(path.join(root, 'ProgramData', 'FakeApp', 'license.dat'), 'x');
+  w(path.join(P, 'AppData', 'Local', 'Microsoft', 'Windows', 'keep-me.txt'), 'system'); // must never be offered
+  w(path.join(P, 'AppData', 'Local', 'StubbornApp', 'keep.dat'), 'x');
+  fs.writeFileSync(path.join(root, '_apps.json'), JSON.stringify([
+    { type: 'win', key: 'FakeApp', hive: 'HKLM', name: 'FakeApp 1.2.3 (x64)', publisher: 'Acme Inc.', version: '1.2.3', sizeKB: 20480, installLocation: path.join(root, 'Program Files', 'FakeApp') },
+    { type: 'win', key: 'OtherApp', hive: 'HKCU', name: 'OtherApp', publisher: 'Other', version: '2.0', sizeKB: 1024, installLocation: path.join(root, 'Program Files', 'OtherApp') },
+    { type: 'win', key: 'StubbornApp', hive: 'HKLM', name: 'StubbornApp', publisher: 'Acme', version: '9', sizeKB: 512, installLocation: path.join(root, 'Program Files', 'StubbornApp'), fail: true },
+    { type: 'win', key: 'VCRedist', hive: 'HKLM', name: 'Microsoft Visual C++ 2015-2022 Redistributable (x64)', publisher: 'Microsoft Corporation', version: '14.38', sizeKB: 20000, installLocation: '' },
+  ], null, 1));
+  // downloaded installers: loose files + a folder of an extracted installer set
+  w(D('Downloads', 'pc apps', 'Photoshop App', 'Setup.exe'), bytes(70000, 31));
+  w(D('Downloads', 'pc apps', 'Photoshop App', 'resources', 'data.pak'), bytes(90000, 32));
+  w(D('Downloads', 'pc apps', 'tool-setup.msi'), bytes(8000, 33));
+  // company handover folder with look-alike project folders (Company Groups tab)
+  for (const n of ['heroapp', 'heroapp-master', 'heroapp (2)', 'portal', 'portal-copy', 'unrelated-thing']) {
+    const base = n.startsWith('heroapp') ? 'heroapp' : n; // heroapp variants are byte-identical copies
+    w(path.join(root, 'Company_Handover', n, 'package.json'), JSON.stringify({ name: base }));
+    w(path.join(root, 'Company_Handover', n, 'src', 'index.js'), `// ${base}`);
+  }
+  w(path.join(root, 'Company_Handover', 'Files', 'loose.txt'), 'x');
   // external "hard disk"
   fs.mkdirSync(path.join(root, 'external'), { recursive: true });
   return { root, profile: P, external: path.join(root, 'external') };

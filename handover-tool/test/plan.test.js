@@ -37,7 +37,7 @@ test('plan: destinations, collisions, regen exclusion, per-action summary', asyn
   assert.ok(p.warnings.some((w) => w.level === 'danger' && /dirty-repo/.test(w.text)), 'dirty Mine project must warn');
   assert.ok(p.warnings.some((w) => /Recycle Bin/.test(w.text)));
   // nothing touched on disk
-  assert.ok(!fs.existsSync(path.join(root, 'Company_Handover')));
+  assert.ok(!fs.existsSync(path.join(root, 'Company_Handover', 'acme-portal')));
   assert.ok(!fs.existsSync(path.join(root, 'external', 'Laptop_Backup')));
   // csv
   const csv = planToCsv(p);

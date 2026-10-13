@@ -41,6 +41,11 @@ Where the spec was silent I picked the simplest safe option. Everything here was
 - After a run, executed items are dropped from the review list; a re-scan reconciles the rest and keeps their tags.
 - A `Mine` removal sends the (regenerable-purged) source to the Recycle Bin, as specified.
 
+## Apps tab and Company Groups tab
+- Separate from the review/execute flow (own routes, own confirmations). Apps: registry Uninstall keys (HKLM 64/32 + HKCU) and Store apps via PowerShell; updates (KB…), system components and framework/system Store packages are not listed. Uninstall uses the registered silent command, else MSI `/x {GUID} /qn`, else the program's own uninstaller (its window opens; UAC may prompt). Success is judged by the program disappearing from the registry, not the exit code. Leftovers are only offered from AppData\Local, AppData\Roaming, ProgramData and Program Files (never Microsoft/Windows/Packages…, never the root itself); exact-name matches start ticked, publisher/guess matches start unticked; the server refuses any leftover path it did not offer in the preview. Leftovers go to the Recycle Bin unless 'permanent' is ticked. Registry leftovers are not touched.
+- Downloaded installers: top-level entries of Downloads (files and whole folders) with size, installer count and a 'contains a project' warning; delete goes to the Recycle Bin.
+- Company Groups: look-alike names (copy, final, v2, (2), hash suffixes…) are clustered; you choose group or keep-normal; moves are renames inside the company folder only; each group gets a `.handover-group.json` marker; the last grouping can be undone.
+
 ## Known limits (not tested on real Windows in this environment)
 - The Windows-only code paths (robocopy, PowerShell Recycle Bin, drive listing via CIM) were written to spec but could only be exercised via Node fallbacks on Linux. Run `sandbox.bat` on the laptop first; it uses the real robocopy/PowerShell code against the fake tree.
 - Paths over 260 chars: Node file APIs use `\\?\`, robocopy handles them natively, but the PowerShell Recycle Bin call may fail for them; those items show up in the error list rather than being deleted.

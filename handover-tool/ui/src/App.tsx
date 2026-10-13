@@ -5,9 +5,11 @@ import { Storage } from './screens/Storage';
 import { Review } from './screens/Review';
 import { Settings } from './screens/Settings';
 import { Execute } from './screens/Execute';
+import { Apps } from './screens/Apps';
+import { Groups } from './screens/Groups';
 import { SummaryBar } from './components/SummaryBar';
 
-const SCREENS = ['Storage', 'Review', 'Execute', 'Settings'] as const;
+const SCREENS = ['Storage', 'Review', 'Execute', 'Apps', 'Company Groups', 'Settings'] as const;
 type Screen = (typeof SCREENS)[number];
 
 export function App() {
@@ -48,6 +50,8 @@ export function App() {
         {screen === 'Storage' && <Storage state={state} version={version} refresh={refresh} />}
         {screen === 'Review' && <Review state={state} version={version} />}
         {screen === 'Execute' && <Execute state={state} version={version} />}
+        {screen === 'Apps' && <Apps state={state} version={version} />}
+        {screen === 'Company Groups' && <Groups state={state} version={version} />}
         {screen === 'Settings' && <Settings state={state} refresh={refresh} />}
       </main>
     </div>

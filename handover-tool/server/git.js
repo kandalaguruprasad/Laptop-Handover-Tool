@@ -49,4 +49,4 @@ async function gitInfo(root) {
   return info;
 }
 
-module.exports = { gitInfo, hasGit, parseGitConfigRemote };
+module.exports = { gitInfo, hasGit, parseGitConfigRemote, parseHeadBranch };
