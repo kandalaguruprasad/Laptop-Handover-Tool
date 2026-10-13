@@ -111,7 +111,9 @@ async function runPlan(plan, env) {
       setStatus(op, { status: 'copying', error: null });
       if (hooks.beforeCopy) await hooks.beforeCopy(op);
       try { await fsops.move(op.src, op.dst); } catch (e) {
-        if (e.code === 'EXDEV') { setStatus(op, { action: 'copy', removeSource: true }); return processCopy(op); }
+        // Rename can fail for reasons a copy does not hit: other volume (EXDEV), OneDrive/Dropbox placeholder folders
+        // (UNKNOWN), AV/indexer locks (EPERM/EBUSY/EACCES). Fall back to copy -> verify -> remove, never to anything riskier.
+        if (e.code !== 'ENOENT' && exists(op.src) && !exists(op.dst)) { setStatus(op, { action: 'copy', removeSource: true, note: `rename failed (${e.code || e.message}); using verified copy instead` }); return processCopy(op); }
         throw e;
       }
     }

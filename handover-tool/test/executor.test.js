@@ -170,3 +170,15 @@ test('guard: destructive primitives refuse anything outside the sandbox / when r
   const { createGuard } = require('../server/guard');
   assert.throws(() => createGuard({}).assertWritable(path.join(c.root, 'x')), GuardError);
 });
+
+test('company move: if rename fails (e.g. OneDrive "UNKNOWN"), falls back to verified copy + remove', async (t) => {
+  const c = await setup(t, tagMix);
+  const op = c.plan.ops.find((o) => o.name === 'acme-portal');
+  assert.strictEqual(op.action, 'move');
+  c.fsops.move = async () => { throw Object.assign(new Error('UNKNOWN: unknown error, rename'), { code: 'UNKNOWN' }); };
+  await c.run();
+  assert.strictEqual(op.status, 'source-removed', op.error);
+  assert.strictEqual(op.action, 'copy');
+  assert.ok(fs.existsSync(path.join(op.dst, 'src', 'file0.ts')));
+  assert.ok(!fs.existsSync(op.src));
+});
