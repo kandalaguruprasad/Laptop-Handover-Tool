@@ -1,0 +1,102 @@
+import { useEffect, useState } from 'react';
+import { api } from '../api';
+import type { AppState, Drive } from '../types';
+import { fmtBytes, fmtDur, TAB_LABEL } from '../util';
+
+function DriveCard({ d, tag }: { d: Drive; tag?: string }) {
+  const pct = d.total ? Math.round((d.used / d.total) * 100) : 0;
+  return (
+    <div className="card">
+      <div className="flex items-baseline justify-between">
+        <div className="font-medium">{d.path} {d.label && <span className="text-zinc-500">{d.label}</span>}</div>
+        <div className="flex gap-2 text-xs">
+          {tag && <span className="rounded bg-amber-500/20 px-1.5 text-amber-300">{tag}</span>}
+          <span className="text-zinc-400">{d.fs || '—'}</span>
+        </div>
+      </div>
+      <div className="my-2 h-2 overflow-hidden rounded bg-zinc-800">
+        <div className={`h-full ${pct > 90 ? 'bg-red-500' : 'bg-sky-500'}`} style={{ width: `${pct}%` }} />
+      </div>
+      <div className="text-xs text-zinc-400">{fmtBytes(d.used)} used · {fmtBytes(d.free)} free · {fmtBytes(d.total)} total</div>
+    </div>
+  );
+}
+
+export function Storage({ state, version, refresh }: { state: AppState; version: number; refresh: () => void }) {
+  const [drives, setDrives] = useState<Drive[]>([]);
+  const [storage, setStorage] = useState<{ categories: Record<string, { n: number; bytes: number }>; largest: { p: string; s: number }[] } | null>(null);
+  const scan = state.scan;
+  useEffect(() => { api<{ drives: Drive[] }>('/api/drives').then((r) => setDrives(r.drives)).catch(() => {}); }, []);
+  useEffect(() => { if (state.summary.scanned) api('/api/storage').then(setStorage).catch(() => {}); }, [version, state.summary.scanned]);
+
+  const dest = state.settings.destDisk.toLowerCase();
+  const isDest = (d: Drive) => !!dest && dest.startsWith(d.path.toLowerCase().replace(/[\\/]+$/, '')) && d.path.length > 1;
+  const external = drives.filter((d) => isDest(d) || d.removable);
+  const laptop = drives.filter((d) => !external.includes(d));
+  const maxCat = Math.max(1, ...Object.values(storage?.categories || {}).map((c) => c.bytes));
+  const maxDir = Math.max(1, ...(storage?.largest || []).map((l) => l.s));
+
+  return (
+    <div className="mx-auto max-w-6xl space-y-6 p-4">
+      <section className="card">
+        <div className="flex flex-wrap items-center gap-3">
+          <h2 className="text-lg font-semibold">Scan</h2>
+          <button className="btn btn-primary" disabled={scan.running} onClick={() => api('/api/scan/start', { body: {} }).then(refresh)}>
+            {state.summary.scanned ? 'Re-scan' : 'Start scan'}
+          </button>
+          {scan.running && <button className="btn" onClick={() => api('/api/scan/cancel', { body: {} })}>Cancel</button>}
+          <span className="text-xs text-zinc-500">Metadata only — file contents are never read. Re-scans keep your tags.</span>
+        </div>
+        <div className="mt-2 text-xs text-zinc-400">Roots: {state.settings.scanRoots.join('  ·  ') || '(none — add some in Settings)'}</div>
+        {scan.stats && (
+          <div className="mt-3 text-sm text-zinc-300">
+            {scan.running ? 'Scanning… ' : 'Last scan: '}
+            {scan.stats.files.toLocaleString()} files · {scan.stats.projects} projects · {scan.stats.dirs.toLocaleString()} folders · {fmtBytes(scan.stats.bytes)}
+            · skipped {scan.stats.skippedRegen} regenerable dirs
+            {scan.running && scan.startedAt ? ` · ${fmtDur(Date.now() - scan.startedAt)}` : ''}
+            {scan.running && <div className="truncate text-xs text-zinc-500">{scan.current}</div>}
+          </div>
+        )}
+        {scan.error && <div className="mt-2 text-red-400">{scan.error}</div>}
+      </section>
+
+      <section className="grid gap-4 md:grid-cols-2">
+        <div className="space-y-3">
+          <h2 className="text-lg font-semibold">Laptop drives</h2>
+          {laptop.map((d) => <DriveCard key={d.path} d={d} />)}
+          {!laptop.length && <div className="text-zinc-500">No drives found.</div>}
+        </div>
+        <div className="space-y-3">
+          <h2 className="text-lg font-semibold">External / destination</h2>
+          {external.map((d) => <DriveCard key={d.path} d={d} tag={isDest(d) ? 'destination' : undefined} />)}
+          {!external.length && <div className="text-zinc-500">No external drive detected. Set the destination in Settings: <code>{state.settings.destDisk || '(not set)'}</code></div>}
+        </div>
+      </section>
+
+      {storage && (
+        <section className="grid gap-4 md:grid-cols-2">
+          <div className="card">
+            <h3 className="mb-3 font-semibold">Size by category</h3>
+            {Object.entries(storage.categories).sort((a, b) => b[1].bytes - a[1].bytes).map(([c, v]) => (
+              <div key={c} className="mb-2">
+                <div className="flex justify-between text-xs"><span>{TAB_LABEL[c] || c} <span className="text-zinc-500">({v.n.toLocaleString()})</span></span><span>{fmtBytes(v.bytes)}</span></div>
+                <div className="h-1.5 rounded bg-zinc-800"><div className="h-full rounded bg-sky-500" style={{ width: `${(v.bytes / maxCat) * 100}%` }} /></div>
+              </div>
+            ))}
+          </div>
+          <div className="card">
+            <h3 className="mb-3 font-semibold">Largest folders</h3>
+            <div className="max-h-96 overflow-auto">
+              {storage.largest.map((l) => (
+                <div key={l.p} className="mb-2">
+                  <div className="flex justify-between gap-2 text-xs"><span className="truncate" title={l.p}>{l.p}</span><span className="shrink-0">{fmtBytes(l.s)}</span></div>
+                  <div className="h-1 rounded bg-zinc-800"><div className="h-full rounded bg-amber-500" style={{ width: `${(l.s / maxDir) * 100}%` }} /></div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+      )}
+    </div>
+  );
+}

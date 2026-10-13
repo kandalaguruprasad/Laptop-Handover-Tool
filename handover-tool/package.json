@@ -1,0 +1,15 @@
+{
+  "name": "handover-tool",
+  "version": "1.0.0",
+  "private": true,
+  "description": "One-time local utility to tag, move and clean a laptop before handover",
+  "main": "server/index.js",
+  "engines": { "node": ">=18" },
+  "scripts": {
+    "start": "node --max-old-space-size=4096 server/index.js --live",
+    "dev": "node --max-old-space-size=4096 server/index.js --sandbox ./sandbox",
+    "fixtures": "node scripts/make-fixtures.js ./sandbox",
+    "test": "node --test test/*.test.js",
+    "build:ui": "npm --prefix ui run build"
+  }
+}

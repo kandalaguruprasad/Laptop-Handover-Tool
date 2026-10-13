@@ -1,0 +1,5 @@
+node_modules/
+handover-tool/data/
+handover-tool/sandbox/
+*.log
+handover-tool/handover-data-sandbox/

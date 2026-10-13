@@ -1,0 +1,11 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html, body, #root { height: 100%; }
+body { font-family: ui-sans-serif, system-ui, Segoe UI, sans-serif; font-size: 14px; }
+.btn { @apply rounded px-3 py-1.5 text-sm font-medium border border-zinc-700 bg-zinc-800 hover:bg-zinc-700 disabled:opacity-40 disabled:cursor-not-allowed; }
+.btn-primary { @apply border-sky-600 bg-sky-600 hover:bg-sky-500 text-white; }
+.btn-danger { @apply border-red-700 bg-red-700 hover:bg-red-600 text-white; }
+.input { @apply rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-sm text-zinc-100 focus:outline-none focus:border-sky-500; }
+.card { @apply rounded-lg border border-zinc-800 bg-zinc-900/60 p-4; }
