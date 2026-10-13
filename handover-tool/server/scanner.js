@@ -21,7 +21,7 @@ function createScanner(app) {
     worker = new Worker(path.join(__dirname, 'scan-worker.js'), {
       workerData: { roots: s.scanRoots, includeAppData: s.includeAppData, regenDirs: s.regenDirs, excludePaths: exclude },
     });
-    worker.on('message', (m) => {
+    worker.on('message', (m) => { try {
       if (m.type === 'items') {
         for (const r of m.items) rows.push(r);
       } else if (m.type === 'git') gitByPath.set(m.path, m.git);
@@ -36,7 +36,7 @@ function createScanner(app) {
         worker.terminate();
         app.broadcast({ type: 'scan', state: publicState() }); app.broadcast({ type: 'db-changed' });
       } else if (m.type === 'error') { st.error = m.message; st.running = false; worker.terminate(); app.broadcast({ type: 'scan', state: publicState() }); }
-    });
+    } catch (e) { st.error = 'Scan result handling failed: ' + String(e && e.stack || e); st.running = false; worker.terminate(); app.broadcast({ type: 'scan', state: publicState() }); } });
     worker.on('error', (e) => { st.error = String(e); st.running = false; app.broadcast({ type: 'scan', state: publicState() }); });
     return true;
   }

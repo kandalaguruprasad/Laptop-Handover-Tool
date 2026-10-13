@@ -66,7 +66,13 @@ export function Storage({ state, version, refresh }: { state: AppState; version:
             </div>
           ) : null;
         })()}
-        {scan.error && <div className="mt-2 text-red-400">{scan.error}</div>}
+        {scan.stats?.errors > 0 && (
+          <details className="mt-2 text-xs text-zinc-500">
+            <summary>{scan.stats.errors} unreadable items were skipped (locked, vanished or permission denied) — click for samples</summary>
+            {(scan.stats.errorSamples || []).map((e: string, i: number) => <div key={i} className="break-all">{e}</div>)}
+          </details>
+        )}
+        {scan.error && <div className="mt-2 whitespace-pre-wrap break-all text-red-400">{scan.error}</div>}
       </section>
 
       <section className="grid gap-4 md:grid-cols-2">

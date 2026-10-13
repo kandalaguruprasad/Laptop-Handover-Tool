@@ -14,7 +14,14 @@ parentPort.on('message', (m) => { if (m && m.type === 'cancel') cancelled = true
 
 const limiter = new Limiter(24);
 const excludeKeys = excludePaths.map((p) => key(norm(p)));
-const stats = { files: 0, dirs: 0, projects: 0, bytes: 0, skippedRegen: 0, skippedExcluded: 0, errors: 0 };
+const stats = { files: 0, dirs: 0, projects: 0, bytes: 0, skippedRegen: 0, skippedExcluded: 0, errors: 0, errorSamples: [] };
+// One unreadable/vanishing path must never abort a multi-hour scan: count it, keep a few samples, carry on.
+function noteError(e, where) {
+  stats.errors++;
+  if (stats.errorSamples.length < 15) stats.errorSamples.push(`${where}: ${String(e && e.stack || e).split('\n').slice(0, 3).join(' | ')}`);
+}
+process.on('uncaughtException', (e) => noteError(e, 'uncaught'));
+process.on('unhandledRejection', (e) => noteError(e, 'unhandled'));
 let batch = [];
 let lastProgress = 0;
 
@@ -33,6 +40,7 @@ function isExcludedDir(full, name) {
   if (PROTECTED_DIR_NAMES.has(lname)) return true;
   if (lname === 'node_modules') { stats.skippedRegen++; return true; } // never walk node_modules, even outside projects
   if (!includeAppData && lname === 'appdata') return true;
+  if (lname.startsWith('.')) return true; // hidden tool folders (.npm, .nuget, .vscode, ...); a project's own .git is a marker, not walked
   const k = key(full);
   for (const ex of excludeKeys) if (k === ex || k.startsWith(ex + path.sep)) return true;
   return false;
@@ -66,7 +74,7 @@ async function processDir(dir) {
   if (visited.has(k)) return [];
   visited.add(k);
   let entries;
-  try { entries = await limiter.run(() => readDirents(dir)); } catch { stats.errors++; return []; }
+  try { entries = await limiter.run(() => readDirents(dir)); } catch (e) { noteError(e, 'readdir ' + dir); return []; }
   stats.dirs++;
   const names = entries.map((e) => e.name);
   if (isProjectRoot(names)) { await handleProject(dir, names); progress(dir); return []; }
@@ -85,7 +93,7 @@ async function processDir(dir) {
           const st = await fs.promises.lstat(full);
           stats.files++; stats.bytes += st.size;
           batch.push(['f', full, st.size, st.mtimeMs]);
-        } catch { stats.errors++; }
+        } catch (e) { noteError(e, 'stat ' + full); }
       }));
     }
   }
@@ -106,7 +114,7 @@ async function main() {
       while (active < 8 && queue.length && !cancelled) {
         const d = queue.shift();
         active++;
-        processDir(d).then((subs) => { queue.push(...subs); }).catch(() => { stats.errors++; })
+        processDir(d).then((subs) => { queue.push(...subs); }).catch((e) => { noteError(e, 'dir ' + d); })
           .finally(() => { active--; pump(); });
       }
       if (active === 0 && (queue.length === 0 || cancelled)) resolve();
@@ -121,7 +129,8 @@ async function main() {
     const gl = new Limiter(4);
     await Promise.all(withGit.map((p) => gl.run(async () => {
       if (cancelled) return;
-      const g = await gitInfo(p.p);
+      let g = null;
+      try { g = await gitInfo(p.p); } catch (e) { noteError(e, 'git ' + p.p); }
       parentPort.postMessage({ type: 'git', path: p.p, git: g });
       done++;
       progress(`git ${done}/${withGit.length}`, done === withGit.length);
