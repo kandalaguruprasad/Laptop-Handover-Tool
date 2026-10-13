@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { api } from '../api';
-import type { AppState, Settings as S } from '../types';
+import type { AppState, Drive, Settings as S } from '../types';
 
 const lines = (a: string[]) => a.join('\n');
 const parse = (s: string) => s.split('\n').map((x) => x.trim()).filter(Boolean);
@@ -30,6 +30,18 @@ export function Settings({ state, refresh }: { state: AppState; refresh: () => v
   const [saved, setSaved] = useState(false);
   const [profileDirs, setProfileDirs] = useState<string[]>([]);
   useEffect(() => { api<{ dirs: string[] }>('/api/profile-folders').then((r) => setProfileDirs(r.dirs)).catch(() => {}); }, []);
+  const [drives, setDrives] = useState<Drive[]>([]);
+  const [driveDirs, setDriveDirs] = useState<Record<string, string[]>>({});
+  useEffect(() => {
+    api<{ drives: Drive[] }>('/api/drives').then(async (r) => {
+      const dest = (state.settings.destDisk || '').toLowerCase();
+      const local = r.drives.filter((d) => !(dest && dest.startsWith(d.path.toLowerCase().replace(/[\\/]+$/, '')) && d.path.length > 1) && !d.removable && d.total > 1e8);
+      setDrives(local);
+      const out: Record<string, string[]> = {};
+      for (const d of local) out[d.path] = (await api<{ dirs: string[] }>(`/api/dirs?path=${encodeURIComponent(d.path)}`)).dirs;
+      setDriveDirs(out);
+    }).catch(() => {});
+  }, [state.settings.destDisk]);
   const set = <K extends keyof S>(k: K, v: S[K]) => { setS((p) => ({ ...p, [k]: v })); setSaved(false); };
   const save = async () => { await api('/api/settings', { method: 'PUT', body: s }); setSaved(true); refresh(); };
   const extra = profileDirs.filter((d) => !s.scanRoots.some((r) => r.toLowerCase() === d.toLowerCase()));
@@ -51,6 +63,20 @@ export function Settings({ state, refresh }: { state: AppState; refresh: () => v
             <div className="flex flex-wrap gap-1">
               {extra.map((d) => <button key={d} className="rounded border border-zinc-700 px-2 py-0.5 hover:bg-zinc-800" onClick={() => set('scanRoots', [...s.scanRoots, d])}>+ {d.split(/[\\/]/).pop()}</button>)}
             </div>
+          </div>
+        )}
+        {drives.length > 0 && (
+          <div className="space-y-2 text-xs">
+            <div className="text-zinc-500">Projects can live anywhere. Add the folders where you keep code or files (click to add as a scan root):</div>
+            {drives.map((d) => (
+              <div key={d.path}>
+                <button className="mr-1 rounded border border-amber-600 px-2 py-0.5 text-amber-300 hover:bg-zinc-800" title="Scans everything on the drive except Windows, Program Files, ProgramData and AppData"
+                  onClick={() => set('scanRoots', [...s.scanRoots, d.path])}>+ whole drive {d.path}</button>
+                {(driveDirs[d.path] || []).filter((x) => !s.scanRoots.some((r) => r.toLowerCase() === x.toLowerCase())).map((x) => (
+                  <button key={x} className="mr-1 mt-1 rounded border border-zinc-700 px-2 py-0.5 hover:bg-zinc-800" onClick={() => set('scanRoots', [...s.scanRoots, x])}>+ {x}</button>
+                ))}
+              </div>
+            ))}
           </div>
         )}
         <Toggle label="Include AppData" hint="Off by default — AppData is huge and rarely worth sorting." v={s.includeAppData} on={(b) => set('includeAppData', b)} />

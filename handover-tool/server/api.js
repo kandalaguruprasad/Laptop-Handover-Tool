@@ -51,6 +51,19 @@ function createApi(app) {
     json(res, { dirs });
   });
 
+  // top-level folders of a drive/folder (names only) so Settings can offer one-click scan roots
+  route('GET', '/api/dirs', async (req, res, url) => {
+    const base = String(url.searchParams.get('path') || '');
+    let dirs = [];
+    try {
+      const skip = new Set(['windows', 'program files', 'program files (x86)', 'programdata', '$recycle.bin', 'system volume information', 'recovery', 'perflogs', 'msocache', '$windows.~bt', '$winreagent']);
+      dirs = fs.readdirSync(base, { withFileTypes: true })
+        .filter((e) => e.isDirectory() && !e.isSymbolicLink() && !skip.has(e.name.toLowerCase()) && !e.name.startsWith('$'))
+        .map((e) => path.join(base, e.name));
+    } catch { /* unreadable */ }
+    json(res, { dirs });
+  });
+
   route('GET', '/api/drives', async (req, res) => json(res, { drives: await listDrives() }));
 
   route('GET', '/api/settings', async (req, res) => json(res, app.settings));

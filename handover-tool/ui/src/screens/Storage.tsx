@@ -57,6 +57,15 @@ export function Storage({ state, version, refresh }: { state: AppState; version:
             {scan.running && <div className="truncate text-xs text-zinc-500">{scan.current}</div>}
           </div>
         )}
+        {scan.stats && !scan.running && (() => {
+          const sys = drives.find((d) => d.system);
+          return sys ? (
+            <div className="mt-2 rounded border border-zinc-800 p-2 text-xs text-zinc-400">
+              Scanned {fmtBytes(scan.stats.bytes)} (regenerable folders like node_modules excluded) out of {fmtBytes(sys.used)} used on {sys.path}. The rest is Windows, programs, AppData and folders that are not scan roots.
+              Projects stored elsewhere (e.g. <code>C:\Projects</code>, other drives) only appear after you add those folders in Settings → Scanning and re-scan.
+            </div>
+          ) : null;
+        })()}
         {scan.error && <div className="mt-2 text-red-400">{scan.error}</div>}
       </section>
 
