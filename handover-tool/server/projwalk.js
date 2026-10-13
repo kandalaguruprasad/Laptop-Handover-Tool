@@ -40,13 +40,12 @@ async function walkTree(root, opts = {}) {
     const names = entries.map((e) => e.name);
     const subdirs = [];
     const statJobs = [];
-    for (const e of entries) {
-      if (e.isSymbolicLink()) continue;
+    for (const e of await classify(dir, entries, limiter)) {
       const full = path.join(dir, e.name);
-      if (e.isDirectory()) {
+      if (e.isDir) {
         if (useRegen && isRegenDir(e.name, regenSet, names, isWin)) { res.regenDirs.push(full); continue; }
         subdirs.push([full, inGit || e.name === '.git']);
-      } else if (e.isFile()) {
+      } else if (e.isFile) {
         statJobs.push(limiter.run(async () => {
           try {
             const st = await fs.promises.lstat(lp(full));
@@ -62,4 +61,22 @@ async function walkTree(root, opts = {}) {
   return res;
 }
 
-module.exports = { walkTree, Limiter, readDirents };
+/**
+ * Dirents flagged as links include Windows cloud placeholders (OneDrive/Dropbox "Files On-Demand" folders and files
+ * are reparse points but NOT symlinks/junctions). lstat tells them apart: real symlinks/junctions stay skipped
+ * (loop protection), cloud entries are treated as ordinary files/folders. lstat never hydrates a placeholder.
+ * @returns {{name:string, isDir:boolean, isFile:boolean}[]}  (true links omitted)
+ */
+async function classify(dir, entries, limiter) {
+  const out = [];
+  await Promise.all(entries.map(async (e) => {
+    if (!e.isSymbolicLink()) { out.push({ name: e.name, isDir: e.isDirectory(), isFile: e.isFile() }); return; }
+    try {
+      const st = await limiter.run(() => fs.promises.lstat(lp(path.join(dir, e.name))));
+      if (!st.isSymbolicLink()) out.push({ name: e.name, isDir: st.isDirectory(), isFile: st.isFile() });
+    } catch { /* unreadable: skip */ }
+  }));
+  return out;
+}
+
+module.exports = { walkTree, Limiter, readDirents, classify };

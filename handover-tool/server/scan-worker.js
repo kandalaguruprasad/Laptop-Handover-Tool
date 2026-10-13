@@ -5,7 +5,7 @@ const path = require('path');
 const fs = require('fs');
 const { isWin, key, isInsideOrSame, PROTECTED_DIR_NAMES, norm } = require('./platform');
 const { extOf, categoryOf, isProjectRoot, detectStack, DEFAULT_REGEN } = require('./categories');
-const { walkTree, Limiter, readDirents } = require('./projwalk');
+const { walkTree, Limiter, readDirents, classify } = require('./projwalk');
 const { gitInfo } = require('./git');
 
 const { roots, includeAppData, regenDirs, excludePaths } = workerData;
@@ -80,13 +80,12 @@ async function processDir(dir) {
   if (isProjectRoot(names)) { await handleProject(dir, names); progress(dir); return []; }
   const subdirs = [];
   const jobs = [];
-  for (const e of entries) {
-    if (e.isSymbolicLink()) continue;
+  for (const e of await classify(dir, entries, limiter)) {
     const full = path.join(dir, e.name);
-    if (e.isDirectory()) {
+    if (e.isDir) {
       if (isExcludedDir(full, e.name)) { stats.skippedExcluded++; continue; }
       subdirs.push(full);
-    } else if (e.isFile()) {
+    } else if (e.isFile) {
       if (isHiddenFile(e.name)) continue;
       jobs.push(limiter.run(async () => {
         try {
