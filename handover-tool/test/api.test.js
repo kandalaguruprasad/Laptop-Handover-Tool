@@ -92,3 +92,20 @@ test('HTTP: read-only mode refuses to run; --sandbox and --live are exclusive', 
   const r = await call(app, 'POST', '/api/run/start', { confirm: true, deleteWord: 'DELETE' });
   assert.strictEqual(r.status, 403);
 });
+
+test('HTTP: group-header tagging touches only that group (direct children within the current filter)', async (t) => {
+  const { base, root } = tmpSandbox({ nm: 5 });
+  const app = await start({ sandbox: root, data: path.join(base, 'data'), port: 0 });
+  t.after(() => { app.server.close(); cleanup(base); });
+  await call(app, 'POST', '/api/scan/start', {});
+  await waitFor(async () => { const s = (await call(app, 'GET', '/api/state')).body; return s.summary.scanned && !s.scan.running; });
+  const holiday = path.join(root, 'profile', 'Pictures', '2023', 'Holiday');
+  const r = await call(app, 'POST', '/api/tag', { group: holiday, filter: { tab: 'images', group: true }, tag: 'ignore' });
+  assert.strictEqual(r.body.changed, 12, 'only the 12 images of that folder');
+  const all = (await call(app, 'GET', '/api/items?tab=all&tag=ignore&limit=100')).body;
+  assert.strictEqual(all.count, 12, 'nothing else (other tabs, parent/sibling folders) was tagged');
+  // a group header must not reach into other tabs even when they share the folder
+  const g2 = await call(app, 'POST', '/api/tag', { group: path.join(root, 'profile', 'Downloads'), filter: { tab: 'installers' }, tag: 'mine' });
+  assert.strictEqual(g2.body.changed, 2);
+  assert.strictEqual((await call(app, 'GET', '/api/items?tab=documents&tag=mine')).body.count, 0);
+});

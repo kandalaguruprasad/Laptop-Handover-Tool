@@ -123,7 +123,11 @@ function createApi(app) {
     if (tag !== null && !TAGS.includes(tag)) return json(res, { error: 'bad tag' }, 400);
     let ids;
     let n;
-    if (b.folder) {
+    if (b.group !== undefined && b.filter) {
+      // group header buttons: only the rows listed under that header (direct children of the folder, within the current filters)
+      ids = app.db.idsRange(parseFilter(b.filter)).filter((id) => app.db.items[id].d === String(b.group));
+      n = app.db.applyTag(ids, tag);
+    } else if (b.folder) {
       n = app.db.tagFolder(String(b.folder), tag);
       ids = app.db.items.filter((it) => it.cloud && it.p.startsWith(String(b.folder))).map((i) => i.id);
     } else {

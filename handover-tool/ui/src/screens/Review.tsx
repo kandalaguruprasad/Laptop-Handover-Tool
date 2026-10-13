@@ -74,8 +74,8 @@ function GroupHeader({ g, onTag }: { g: GroupRow; onTag: (tag: string | null) =>
         {g.tags.none > 0 && <span className="text-amber-300">?{g.tags.none}</span>}
       </span>
       <span className="flex gap-1">
-        {(['company', 'mine', 'ignore'] as const).map((t) => <button key={t} className={`rounded border px-1.5 py-0.5 ${TAG_CLASS[t]}`} onClick={() => onTag(t)}>{TAG_LABEL[t]}</button>)}
-        <button className="rounded border border-zinc-700 px-1.5 py-0.5 text-zinc-400" onClick={() => onTag(null)}>Clear</button>
+        {(['company', 'mine', 'ignore'] as const).map((t) => <button key={t} title={`Tag only the ${g.count} items listed in this group as ${TAG_LABEL[t]}`} className={`rounded border px-1.5 py-0.5 ${TAG_CLASS[t]}`} onClick={() => onTag(t)}>{TAG_LABEL[t]}</button>)}
+        <button title={`Clear the tag on the ${g.count} items listed in this group`} className="rounded border border-zinc-700 px-1.5 py-0.5 text-zinc-400" onClick={() => onTag(null)}>Clear</button>
       </span>
     </div>
   );
@@ -236,7 +236,7 @@ export function Review({ state, version }: { state: AppState; version: number })
             return (
               <div key={v.key} style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: ROW_H, transform: `translateY(${v.start}px)` }}>
                 {!r ? <div className="h-full animate-pulse border-b border-zinc-900" /> : isGroup(r)
-                  ? <GroupHeader g={r} onTag={(t) => applyTag(t, { folder: r.folder })} />
+                  ? <GroupHeader g={r} onTag={(t) => applyTag(t, { group: r.folder, filter: filterBody(fRef.current) })} />
                   : <ItemRow it={r} selected={sel.has(r.id)} onClick={(e) => click(v.index, r, e)} onAccept={() => applyTag(r.sug, { ids: [r.id] })} />}
               </div>
             );

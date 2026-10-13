@@ -44,4 +44,4 @@ Where the spec was silent I picked the simplest safe option. Everything here was
 - The Windows-only code paths (robocopy, PowerShell Recycle Bin, drive listing via CIM) were written to spec but could only be exercised via Node fallbacks on Linux. Run `sandbox.bat` on the laptop first; it uses the real robocopy/PowerShell code against the fake tree.
 - Paths over 260 chars: Node file APIs use `\\?\`, robocopy handles them natively, but the PowerShell Recycle Bin call may fail for them; those items show up in the error list rather than being deleted.
 - Ignore files go to the Recycle Bin one by one, which is slow for 100k+ files (hours). Prefer tagging whole junk folders' *projects* Ignore, or delete obvious junk by hand first.
-- Tagging a folder tags all scanned items under it, including projects.
+- Group-header buttons (Review → Group by folder) tag only the rows listed under that header: direct children of that folder inside the current tab/filters. (`POST /api/tag` with `folder` still cascades to everything below a folder, but the UI does not use it.)
