@@ -22,6 +22,7 @@ Where the spec was silent I picked the simplest safe option. Everything here was
 - Metadata only (`opendir` + `lstat`), never opens file contents. Symlinks/junctions skipped. OneDrive placeholders are ordinary `lstat` entries, so no hydration.
 - "Hidden/system files skipped" is implemented by name: dot-files, `~$*`, `desktop.ini`, `thumbs.db`, `ntuser.*` (reading Windows attribute bits would need a process per file).
 - `node_modules` is skipped **everywhere**, even outside a detected project (a stray one would otherwise add 100k junk rows). Other regenerable names apply only inside projects. `target`/`bin` only count with a sibling `Cargo.toml`/`pom.xml`/`.csproj`.
+- AppData is always excluded (no setting; also stripped from older saved scans on load).
 - Default scan roots: Desktop, Documents, Downloads, Pictures, Videos, Music, plus `OneDrive*`/`Dropbox*`/`Google Drive*` folders found in the profile. Other top-level profile folders are offered as one-click additions in Settings (not default, because the profile root also holds junk like `.vscode`, `.npm`, `AppData`).
 - Project size/file count exclude regenerable dirs; "last modified" ignores `.git` internals. Git info: remote and branch are parsed from `.git/config`/`HEAD` (no process); dirty and unpushed counts use the `git` CLI (30 s timeout per command, skipped if git is missing). "Unpushed" = commits not reachable from any remote ref (`rev-list HEAD --not --remotes`), so it also works when no upstream is set. `GIT_CEILING_DIRECTORIES` stops git from discovering an enclosing repo.
 

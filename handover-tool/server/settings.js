@@ -14,7 +14,7 @@ function defaults(sandbox) {
   } catch { /* profile missing */ }
   return {
     scanRoots: roots,
-    includeAppData: false,
+    includeAppData: false, // legacy key; AppData is now always excluded
     regenDirs: [...DEFAULT_REGEN],
     companyPatterns: [],
     minePatterns: [],
@@ -32,7 +32,7 @@ function defaults(sandbox) {
 
 function load(file, sandbox) {
   const d = defaults(sandbox);
-  try { return { ...d, ...JSON.parse(fs.readFileSync(file, 'utf8')) }; } catch { return d; }
+  try { return { ...d, ...JSON.parse(fs.readFileSync(file, 'utf8')), includeAppData: false }; } catch { return d; }
 }
 
 function sanitize(input, current) {
@@ -41,7 +41,7 @@ function sanitize(input, current) {
   for (const k of ['scanRoots', 'regenDirs', 'companyPatterns', 'minePatterns']) {
     const v = arr(input[k]); if (v) s[k] = v;
   }
-  for (const k of ['includeAppData', 'permanentDelete', 'deleteSourceAfterCopy', 'paranoidHash', 'purgeCompanyRegen', 'cleanEmptyDirs']) {
+  for (const k of ['permanentDelete', 'deleteSourceAfterCopy', 'paranoidHash', 'purgeCompanyRegen', 'cleanEmptyDirs']) {
     if (typeof input[k] === 'boolean') s[k] = input[k];
   }
   for (const k of ['destDisk', 'companyFolder']) if (typeof input[k] === 'string') s[k] = input[k].trim();

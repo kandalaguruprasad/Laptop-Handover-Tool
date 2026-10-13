@@ -79,7 +79,7 @@ export function Settings({ state, refresh }: { state: AppState; refresh: () => v
             ))}
           </div>
         )}
-        <Toggle label="Include AppData" hint="Off by default — AppData is huge and rarely worth sorting." v={s.includeAppData} on={(b) => set('includeAppData', b)} />
+        <div className="text-xs text-zinc-500">AppData (<code>C:\Users\&lt;you&gt;\AppData</code>) is always excluded: it only holds caches, SDKs and app data.</div>
         <Area label="Regenerable directories" hint="Never descended into inside projects, never copied. 'target' and 'bin' only count when a Cargo.toml / pom.xml / .csproj sits next to them. node_modules is always skipped." v={s.regenDirs} on={(a) => set('regenDirs', a)} />
       </section>
 

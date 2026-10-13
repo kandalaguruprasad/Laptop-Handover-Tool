@@ -10,6 +10,7 @@ const { writeJsonAtomic, readJson } = require('./jsonfile');
 
 const CLOUD_RE = /[\\/](onedrive[^\\/]*|dropbox[^\\/]*|google drive|googledrive|icloud[^\\/]*|box)([\\/]|$)/i;
 const TAGS = ['company', 'mine', 'ignore'];
+const APPDATA_RE = /[\\/]appdata([\\/]|$)/i;
 
 class DB {
   constructor(dir) {
@@ -39,7 +40,8 @@ class DB {
       if (r[0] === 'meta') meta = r[1];
       else items.push(r);
     }
-    this._ingest(items);
+    // AppData is never part of a handover (also drops it from scans saved before this rule existed)
+    this._ingest(items.filter((r) => !APPDATA_RE.test(r[0] === 'f' ? r[1] : r[1].p)));
     this.meta = meta;
     return true;
   }

@@ -39,7 +39,7 @@ function isExcludedDir(full, name) {
   const lname = name.toLowerCase();
   if (PROTECTED_DIR_NAMES.has(lname)) return true;
   if (lname === 'node_modules') { stats.skippedRegen++; return true; } // never walk node_modules, even outside projects
-  if (!includeAppData && lname === 'appdata') return true;
+  if (lname === 'appdata') return true; // always excluded: caches/SDKs/app data, never worth sorting
   if (lname.startsWith('.')) return true; // hidden tool folders (.npm, .nuget, .vscode, ...); a project's own .git is a marker, not walked
   const k = key(full);
   for (const ex of excludeKeys) if (k === ex || k.startsWith(ex + path.sep)) return true;
@@ -104,7 +104,7 @@ async function processDir(dir) {
 
 async function main() {
   // drop roots nested inside other roots
-  const uniq = [...new Set(roots.map(norm))].filter((r) => fs.existsSync(r));
+  const uniq = [...new Set(roots.map(norm))].filter((r) => fs.existsSync(r) && !/[\\/]appdata([\\/]|$)/i.test(r));
   // nested roots are kept on purpose: an explicit root (e.g. OneDrive inside C:\\Users) is scanned directly even if the parent walk
   // skips it; the `visited` set prevents any folder being scanned twice. Shorter paths first so parents claim their children.
   const queue = uniq.sort((a, b) => a.length - b.length);

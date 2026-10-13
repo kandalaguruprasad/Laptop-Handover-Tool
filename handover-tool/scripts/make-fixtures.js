@@ -91,6 +91,9 @@ function makeFixtures(root, opts = {}) {
   w(D('Documents', 'locked', 'in-use.docx'), bytes(2000, 21));
   // symlink loop
   try { fs.symlinkSync(D('Documents'), D('Documents', 'loop'), 'junction'); } catch { /* may lack permission */ }
+  // AppData must never be scanned, even when it contains projects
+  w(D('AppData', 'Local', 'Tool', 'data.bin'), 'x');
+  makeProject(D('AppData', 'Local', 'Android', 'Sdk', 'python-packages', 'adb'), { realGit: false });
   // external "hard disk"
   fs.mkdirSync(path.join(root, 'external'), { recursive: true });
   return { root, profile: P, external: path.join(root, 'external') };

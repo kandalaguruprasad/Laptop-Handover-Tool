@@ -74,3 +74,25 @@ test('scanner: nested roots are scanned once, explicit nested root works', async
   assert.strictEqual(new Set(paths).size, paths.length, 'no item may appear twice');
   assert.ok(paths.some((p) => p.includes('OneDrive - Acme')));
 });
+
+test('scanner: AppData is always excluded (even as a root, even if saved settings say include)', async (t) => {
+  const { tmpSandbox, cleanup: cl } = require('./helpers');
+  const { createApp } = require('../server/index');
+  const { DB } = require('../server/db');
+  const { base, root } = tmpSandbox({ nm: 5 });
+  t.after(() => cl(base));
+  require('fs').writeFileSync(path.join(base, 'data-settings.json'), '{}');
+  const app = createApp({ sandbox: root, data: path.join(base, 'data') });
+  app.settings.includeAppData = true;
+  app.settings.scanRoots = [path.join(root, 'profile'), path.join(root, 'profile', 'AppData')];
+  app.scanner.start();
+  while (app.scanner.state().running) await new Promise((r) => setTimeout(r, 25));
+  assert.ok(app.db.items.length > 10);
+  assert.ok(!app.db.items.some((i) => /appdata/i.test(i.p)), 'AppData leaked into the scan');
+  // an old scan file that still contains AppData rows is cleaned on load
+  const lines = require('fs').readFileSync(app.db.scanFile, 'utf8').split('\n');
+  lines.push(JSON.stringify(['f', path.join(root, 'profile', 'AppData', 'Local', 'old.bin'), 5, 1]));
+  require('fs').writeFileSync(app.db.scanFile, lines.join('\n'));
+  const d2 = new DB(app.dataDir); d2.load();
+  assert.ok(!d2.items.some((i) => /appdata/i.test(i.p)));
+});
