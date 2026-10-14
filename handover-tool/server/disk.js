@@ -62,13 +62,13 @@ function createDiskService(app) {
     for (let i = n - 1; i > 0; i--) { total[parents[i]] += total[i]; totalFiles[parents[i]] += totalFiles[i]; }
     const first = new Int32Array(n).fill(-1); const next = new Int32Array(n).fill(-1);
     for (let i = n - 1; i > 0; i--) { next[i] = first[parents[i]]; first[parents[i]] = i; }
-    st.tree = { names: m.names, parents, own: m.own, ownFiles: m.ownFiles, total, totalFiles, first, next, gone: new Uint8Array(n), top: m.top, ext: m.ext, cloud: m.cloud, errors: m.stats.errors, errorSamples: m.errorSamples, rootPath: env().root };
+    st.tree = { names: m.names, parents, own: m.own, ownFiles: m.ownFiles, total, totalFiles, first, next, gone: new Uint8Array(n), top: m.top, ext: m.ext, extTop: new Map(m.extTop), cloud: m.cloud, errors: m.stats.errors, errorSamples: m.errorSamples, rootPath: env().root };
   }
 
   function start() {
     if (st.running) return false;
     Object.assign(st, { running: true, error: null, stats: null, current: '', startedAt: Date.now() });
-    const w = new Worker(path.join(__dirname, 'disk-worker.js'), { workerData: { root: env().root, profileRoot: norm(app.settings.profileRoot) } });
+    const w = new Worker(path.join(__dirname, 'disk-worker.js'), { workerData: { root: env().root, profileRoot: norm(app.settings.profileRoot), minListBytes: app.sandbox ? 1024 : 256 * 1024 } });
     st.worker = w;
     const push = () => app.broadcast({ type: 'disk', state: scanView() });
     w.on('message', (m) => {
@@ -133,6 +133,21 @@ function createDiskService(app) {
     return [...by.values()].sort((a, b) => b.bytes - a.bytes);
   }
 
+  /** One file-type group (as in the pie chart): extension breakdown + its largest files, optionally limited to one extension. */
+  function categoryDetail(name, onlyExt) {
+    const t = T(); if (!t) throw new Error('Scan the drive first.');
+    const exts = [];
+    let bytes = 0; let files = 0;
+    for (const [e, b, c] of t.ext) if ((TYPE_OF.get(e) || 'Other files') === name) { exts.push({ ext: e, bytes: b, files: c }); bytes += b; files += c; }
+    if (!exts.length) throw new Error('Unknown file type group.');
+    exts.sort((a, b) => b.bytes - a.bytes);
+    let items = [];
+    for (const x of exts) if (onlyExt === undefined || onlyExt === x.ext) for (const f of t.extTop.get(x.ext) || []) items.push(f);
+    items = items.filter((f) => fs.existsSync(f.p)).sort((a, b) => b.s - a.s).slice(0, 300);
+    return { name, bytes, files, exts: exts.slice(0, 60), moreExts: Math.max(0, exts.length - 60), onlyExt: onlyExt === undefined ? null : onlyExt,
+      items: items.map((f) => view(f.p, false, f.s, { m: f.m })), listedBytes: items.reduce((a, f) => a + f.s, 0) };
+  }
+
   function quickWins() {
     const t = T(); if (!t) throw new Error('Scan the drive first.');
     const e = env(); const found = new Map(); const keep = [];
@@ -169,7 +184,7 @@ function createDiskService(app) {
         else { const [r] = await fsops.recycle([{ p, isDir }], { permanent: !!permanent }); if (!r.ok) throw new Error(r.error); }
         if (t) {
           if (isDir && before && before.i >= 0) { subtract(t.parents[before.i], before.bytes, before.files); t.gone[before.i] = 1; }
-          else if (!isDir) { const pi = idxOf(path.dirname(p)); if (pi >= 0) { t.own[pi] -= s.size; subtract(pi, s.size, 1); } t.top = t.top.filter((f) => key(f.p) !== key(p)); }
+          else if (!isDir) { const pi = idxOf(path.dirname(p)); if (pi >= 0) { t.own[pi] -= s.size; subtract(pi, s.size, 1); } t.top = t.top.filter((f) => key(f.p) !== key(p)); for (const [k, arr] of t.extTop) t.extTop.set(k, arr.filter((f) => key(f.p) !== key(p))); }
         }
         results.push({ path: p, ok: true, bytes: before ? before.bytes : 0 });
       } catch (err) { results.push({ path: p, ok: false, error: String(err.message || err) }); }
@@ -215,7 +230,7 @@ function createDiskService(app) {
     return { freed: bytes };
   }
 
-  return { start, cancel, state, list, topFiles, categories, quickWins, remove, startClean, cleanView: jobView, cancelClean: () => { if (job) job.cancelled = true; }, emptyRecycleBin, scanView, isScanned: () => !!st.tree };
+  return { start, cancel, state, list, topFiles, categories, categoryDetail, quickWins, remove, startClean, cleanView: jobView, cancelClean: () => { if (job) job.cancelled = true; }, emptyRecycleBin, scanView, isScanned: () => !!st.tree };
 }
 
 module.exports = { createDiskService, TYPE_GROUPS };

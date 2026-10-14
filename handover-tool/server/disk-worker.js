@@ -8,7 +8,7 @@ const { readDirents, Limiter, classify } = require('./projwalk');
 const { CLOUD_RE } = require('./diskknow');
 const { lp } = require('./platform');
 
-const { root, profileRoot } = workerData;
+const { root, profileRoot, minListBytes = 256 * 1024 } = workerData;
 const usersDirNames = new Set(['users', 'home']);
 const limiter = new Limiter(32);
 let cancelled = false;
@@ -18,6 +18,7 @@ const names = [path.basename(root) || root]; const parents = [-1]; const own = [
 const stats = { files: 0, dirs: 1, bytes: 0, errors: 0 };
 const errorSamples = []; const cloud = []; const ext = new Map(); let top = []; let topMin = 0;
 const seenLinks = new Set();
+const extTop = new Map(); // ext -> largest files with that extension (so a file type can be opened and cleaned)
 let lastProgress = 0; let current = root;
 
 function progress(force) {
@@ -62,6 +63,11 @@ async function processDir(idx, dir) {
           const x = path.extname(e.name).slice(1).toLowerCase();
           const c = ext.get(x) || [0, 0]; c[0] += st.size; c[1]++; ext.set(x, c);
           if (st.size > 5 * 1024 * 1024) addTop(full, st.size, st.mtimeMs);
+          if (st.size >= minListBytes) {
+            let arr = extTop.get(x); if (!arr) extTop.set(x, (arr = []));
+            arr.push({ p: full, s: st.size, m: st.mtimeMs });
+            if (arr.length > 400) { arr.sort((a, b) => b.s - a.s); arr.length = 200; }
+          }
         } catch (er) { noteError(er, full); }
       }));
     }
@@ -88,7 +94,7 @@ async function main() {
   top.sort((a, b) => b.s - a.s); top = top.slice(0, 300);
   const out = {
     type: 'done', cancelled, names, parents: Int32Array.from(parents), own: Float64Array.from(own), ownFiles: Int32Array.from(ownFiles),
-    top, ext: [...ext].map(([k, v]) => [k, v[0], v[1]]), cloud, stats, errorSamples,
+    top, ext: [...ext].map(([k, v]) => [k, v[0], v[1]]), extTop: [...extTop].map(([k, a]) => [k, a.sort((x, y) => y.s - x.s).slice(0, 200)]), cloud, stats, errorSamples,
   };
   parentPort.postMessage(out, [out.parents.buffer, out.own.buffer, out.ownFiles.buffer]);
 }

@@ -80,6 +80,17 @@ test('C Drive: scan totals, browse with explanations, quick wins, guarded cleanu
   assert.ok(cats.find((c) => c.name === 'Programs & system files').bytes > 100000);
   assert.ok((await call(app, 'GET', '/api/disk/top')).body.files[0].size >= 6 * 1024 * 1024, 'biggest file first (iso)');
 
+  // file-type groups can be opened: extension breakdown + the files themselves
+  const img = (await call(app, 'GET', '/api/disk/category?name=' + encodeURIComponent('Disk images & virtual machines'))).body;
+  assert.ok(img.exts.some((e) => e.ext === 'iso') && img.items[0].name === 'big-image.iso' && img.items[0].verdict === 'review');
+  const sysCat = (await call(app, 'GET', '/api/disk/category?name=' + encodeURIComponent('Programs & system files'))).body;
+  assert.ok(sysCat.items.some((i) => i.name === 'kernel.dll' && i.verdict === 'system' && !i.deletable), 'system files are listed but protected');
+  const onlyDll = (await call(app, 'GET', '/api/disk/category?name=' + encodeURIComponent('Programs & system files') + '&ext=dll')).body;
+  assert.ok(onlyDll.items.length > 0 && onlyDll.items.every((i) => i.name.endsWith('.dll')));
+  assert.ok((await call(app, 'GET', '/api/disk/category?name=Nope')).status === 400);
+  const other = (await call(app, 'GET', '/api/disk/category?name=' + encodeURIComponent('Other files'))).body;
+  assert.ok(other.exts.length > 0 && other.bytes > 0);
+
   // quick wins
   const quick = (await call(app, 'GET', '/api/disk/quick')).body.items;
   const g = Object.fromEntries(quick.map((q) => [q.group, q]));

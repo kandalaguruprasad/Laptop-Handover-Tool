@@ -50,6 +50,7 @@ function register({ app, route, json, readBody }) {
   route('GET', '/api/disk/list', wrap(async (req, res, url) => disk.list(url.searchParams.get('path') || '')));
   route('GET', '/api/disk/top', wrap(async () => ({ files: disk.topFiles() })));
   route('GET', '/api/disk/categories', wrap(async () => ({ categories: disk.categories() })));
+  route('GET', '/api/disk/category', wrap(async (req, res, url) => { const e = url.searchParams.get('ext'); return disk.categoryDetail(url.searchParams.get('name') || '', e === null ? undefined : e); }));
   route('GET', '/api/disk/quick', wrap(async () => ({ items: disk.quickWins() })));
   route('POST', '/api/disk/delete', async (req, res) => {
     const b = await readBody(req);

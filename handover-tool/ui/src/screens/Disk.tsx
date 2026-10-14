@@ -11,6 +11,7 @@ interface DiskState {
   scanned: boolean; scannedBytes: number; unaccounted: number; cloud: string[]; unreadable: number; unreadableSamples: string[];
 }
 interface Listing { path: string; crumbs: { name: string; path: string }[]; total: number; ownBytes: number; here: Row; dirs: Row[]; files: Row[]; moreFiles: number; moreDirs: number }
+interface CatDetail { name: string; bytes: number; files: number; exts: { ext: string; bytes: number; files: number }[]; moreExts: number; onlyExt: string | null; items: Row[]; listedBytes: number }
 interface Quick { group: string; title: string; bytes: number; verdict: Verdict; why: string; special: string | null; deletableCount: number; paths: { path: string; bytes: number; deletable: boolean }[] }
 
 const V: Record<Verdict, [string, string, string]> = {
@@ -25,7 +26,10 @@ const Chip = ({ v }: { v: Verdict }) => <span title={V[v][2]} className={`whites
 
 export function Disk({ state }: { state: AppState; version: number }) {
   const [ds, setDs] = useState<DiskState | null>(null);
-  const [tab, setTab] = useState<'overview' | 'browse' | 'files'>('overview');
+  const [tab, setTab] = useState<'overview' | 'browse' | 'files' | 'types'>('overview');
+  const [cat, setCat] = useState<string | null>(null);
+  const [catExt, setCatExt] = useState<string | null>(null);
+  const [catData, setCatData] = useState<CatDetail | null>(null);
   const [cwd, setCwd] = useState('');
   const [listing, setListing] = useState<Listing | null>(null);
   const [cats, setCats] = useState<{ name: string; bytes: number; files: number }[]>([]);
@@ -62,7 +66,14 @@ export function Disk({ state }: { state: AppState; version: number }) {
     api<{ job: CleanJob | null }>('/api/disk/clean').then((r) => setJob(r.job));
     document.querySelector('main')?.scrollTo({ top: 0, behavior: 'smooth' });
   }, []);
-  const refreshAll = async () => { await loadState(); await loadScanned(); if (tab === 'browse') await loadList(cwd); };
+  const openCat = useCallback(async (name: string, ext: string | null = null) => {
+    setErr('');
+    try {
+      const d = await api<CatDetail>(`/api/disk/category?name=${encodeURIComponent(name)}${ext === null ? '' : `&ext=${encodeURIComponent(ext)}`}`);
+      setCat(name); setCatExt(ext); setCatData(d); setTab('types');
+    } catch (e: any) { setErr(e.message); }
+  }, []);
+  const refreshAll = async () => { if (cat) await openCat(cat, catExt); await loadState(); await loadScanned(); if (tab === 'browse') await loadList(cwd); };
   const scan = () => { setErr(''); setMsg(''); setListing(null); api('/api/disk/scan', { body: {} }).then(loadState); };
   const drill = (p: string) => { setTab('browse'); loadList(p); };
 
@@ -127,8 +138,8 @@ export function Disk({ state }: { state: AppState; version: number }) {
       {ds?.scanned && (
         <>
           <div className="flex items-center gap-2">
-            {([['overview', 'Overview'], ['browse', 'Browse folders'], ['files', 'Largest files']] as const).map(([k, l]) => (
-              <button key={k} onClick={() => setTab(k)} className={`rounded px-3 py-1 text-sm ${tab === k ? 'bg-zinc-700 text-white' : 'text-zinc-400 hover:bg-zinc-800'}`}>{l}</button>
+            {([['overview', 'Overview'], ['types', 'File types'], ['browse', 'Browse folders'], ['files', 'Largest files']] as const).map(([k, l]) => (
+              <button key={k} onClick={() => { setTab(k); if (k === 'types' && !catData && cats.length) openCat(cats[0].name); }} className={`rounded px-3 py-1 text-sm ${tab === k ? 'bg-zinc-700 text-white' : 'text-zinc-400 hover:bg-zinc-800'}`}>{l}</button>
             ))}
             <div className="ml-auto flex flex-wrap gap-2 text-xs">{(Object.keys(V) as Verdict[]).map((v) => <Chip key={v} v={v} />)}</div>
           </div>
@@ -140,10 +151,40 @@ export function Disk({ state }: { state: AppState; version: number }) {
                   <Donut size={200} fmt={fmtBytes} center={{ title: fmtBytes(rootList.total), sub: 'scanned' }}
                     slices={topSlices([...rootList.dirs.map((x) => ({ label: x.name, value: x.size, onClick: () => drill(x.path), hint: x.title })), ...rootList.files.map((f) => ({ label: f.name, value: f.size, hint: f.title }))])} /></div>
                 <div className="card"><h3 className="mb-3 font-semibold">By file type</h3>
-                  <Donut size={200} fmt={fmtBytes} center={{ title: fmtBytes(cats.reduce((a, c) => a + c.bytes, 0)), sub: 'all files' }} slices={topSlices(cats.map((c) => ({ label: c.name, value: c.bytes, hint: `${c.files.toLocaleString()} files` })), 9)} /></div>
+                  <Donut size={200} fmt={fmtBytes} center={{ title: fmtBytes(cats.reduce((a, c) => a + c.bytes, 0)), sub: 'all files' }} slices={topSlices(cats.map((c) => ({ label: c.name, value: c.bytes, onClick: () => openCat(c.name), hint: `${c.files.toLocaleString()} files — click to open` })), 12)} />
+                  <div className="mt-2 text-xs text-zinc-500">Click a slice or a name to open that file type and see its files.</div></div>
               </section>
               <QuickWins items={quick} onDone={(m) => { setMsg(m); refreshAll(); }} mode={state.mode} />
             </>
+          )}
+
+          {tab === 'types' && (
+            <section className="card space-y-3">
+              <div className="flex flex-wrap gap-2">
+                {cats.map((c) => (
+                  <button key={c.name} onClick={() => openCat(c.name)} className={`rounded border px-2 py-1 text-xs ${cat === c.name ? 'border-sky-500 bg-sky-500/20 text-sky-200' : 'border-zinc-700 text-zinc-300 hover:bg-zinc-800'}`}>
+                    {c.name} <span className="text-zinc-500">{fmtBytes(c.bytes)}</span>
+                  </button>
+                ))}
+              </div>
+              {catData && (
+                <>
+                  <div className="text-sm"><b>{catData.name}</b> — {fmtBytes(catData.bytes)} in {catData.files.toLocaleString()} files</div>
+                  <div className="flex flex-wrap items-center gap-1 text-xs">
+                    <span className="text-zinc-500">File extension:</span>
+                    <button onClick={() => openCat(catData.name)} className={`rounded border px-2 py-0.5 ${catData.onlyExt === null ? 'border-sky-500 text-sky-200' : 'border-zinc-700 text-zinc-300'}`}>all</button>
+                    {catData.exts.map((e) => (
+                      <button key={e.ext} onClick={() => openCat(catData.name, e.ext)} className={`rounded border px-2 py-0.5 ${catData.onlyExt === e.ext ? 'border-sky-500 text-sky-200' : 'border-zinc-700 text-zinc-300 hover:bg-zinc-800'}`}>
+                        {e.ext ? `.${e.ext}` : '(no extension)'} <span className="text-zinc-500">{fmtBytes(e.bytes)} · {e.files.toLocaleString()}</span>
+                      </button>
+                    ))}
+                    {catData.moreExts > 0 && <span className="text-zinc-500">+{catData.moreExts} more small types</span>}
+                  </div>
+                  <div className="text-xs text-zinc-500">Showing the {catData.items.length} largest files{catData.onlyExt !== null ? ` of this extension` : ''} ({fmtBytes(catData.listedBytes)}). Files under 256 KB are counted in the totals but not listed one by one.</div>
+                  <RowTable rows={catData.items} total={catData.bytes || 1} onOpenDir={() => {}} onDone={(m) => { setMsg(m); refreshAll(); }} mode={state.mode} showPath />
+                </>
+              )}
+            </section>
           )}
 
           {tab === 'browse' && (
