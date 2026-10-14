@@ -87,6 +87,10 @@ test('C Drive: scan totals, browse with explanations, quick wins, guarded cleanu
   // file-type groups can be opened: extension breakdown + the files themselves
   const img = (await call(app, 'GET', '/api/disk/category?name=' + encodeURIComponent('Disk images & virtual machines'))).body;
   assert.ok(img.exts.some((e) => e.ext === 'iso') && img.items[0].name === 'big-image.iso' && img.items[0].verdict === 'review');
+  assert.ok(img.locations.length > 0 && Math.abs(img.locations.reduce((a, l) => a + l.bytes, 0) - img.bytes) < 1, 'locations add up to the category total');
+  const pics = (await call(app, 'GET', '/api/disk/category?name=Pictures')).body;
+  assert.ok(Math.abs(pics.locations.reduce((a, l) => a + l.bytes, 0) + 0 - pics.bytes) < 1 || pics.moreLocations > 0);
+  assert.ok(pics.locations.every((l) => l.verdict && typeof l.deletable === 'boolean'));
   const sysCat = (await call(app, 'GET', '/api/disk/category?name=' + encodeURIComponent('Programs & system files'))).body;
   assert.ok(sysCat.items.some((i) => i.name === 'kernel.dll' && i.verdict === 'system' && !i.deletable), 'system files are listed but protected');
   const onlyDll = (await call(app, 'GET', '/api/disk/category?name=' + encodeURIComponent('Programs & system files') + '&ext=dll')).body;

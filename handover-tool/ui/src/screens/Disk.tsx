@@ -11,7 +11,8 @@ interface DiskState {
   scanned: boolean; scannedBytes: number; unaccounted: number; cloud: string[]; unreadable: number; unreadableSamples: string[];
 }
 interface Listing { path: string; crumbs: { name: string; path: string }[]; total: number; ownBytes: number; here: Row; dirs: Row[]; files: Row[]; moreFiles: number; moreDirs: number }
-interface CatDetail { name: string; bytes: number; files: number; exts: { ext: string; bytes: number; files: number }[]; moreExts: number; onlyExt: string | null; items: Row[]; listedBytes: number }
+interface Loc { path: string; bytes: number; files: number; verdict: Verdict; title: string; deletable: boolean }
+interface CatDetail { locations: Loc[]; moreLocations: number; protectedBytes: number; name: string; bytes: number; files: number; exts: { ext: string; bytes: number; files: number }[]; moreExts: number; onlyExt: string | null; items: Row[]; listedBytes: number }
 interface Quick { group: string; title: string; bytes: number; verdict: Verdict; why: string; special: string | null; deletableCount: number; paths: { path: string; bytes: number; deletable: boolean }[] }
 
 const V: Record<Verdict, [string, string, string]> = {
@@ -179,6 +180,21 @@ export function Disk({ state }: { state: AppState; version: number }) {
                       </button>
                     ))}
                     {catData.moreExts > 0 && <span className="text-zinc-500">+{catData.moreExts} more small types</span>}
+                  </div>
+                  <div className="rounded border border-zinc-800 p-3">
+                    <div className="mb-2 text-sm font-medium">Where these {fmtBytes(catData.onlyExt === null ? catData.bytes : catData.locations.reduce((a, l) => a + l.bytes, 0))} are</div>
+                    <div className="mb-2 text-xs text-zinc-400">
+                      🔒 Protected (Windows, programs, company handover): <b>{fmtBytes(catData.protectedBytes)}</b> · you can clean up: <b>{fmtBytes(Math.max(0, catData.locations.reduce((a, l) => a + l.bytes, 0) - catData.protectedBytes))}</b> · the list below shows only the largest files, so it covers less than the total.
+                    </div>
+                    {catData.locations.map((l) => (
+                      <div key={l.path} className="mb-1 flex items-center gap-2 text-xs">
+                        <button className="min-w-0 flex-1 truncate text-left text-sky-300 hover:underline" title={`${l.path} — open in Browse folders`} onClick={() => { setTab('browse'); loadList(l.path); }}>{l.path}</button>
+                        <span className="w-20 shrink-0 text-right">{fmtBytes(l.bytes)}</span>
+                        <div className="h-1.5 w-24 shrink-0 rounded bg-zinc-800"><div className="h-full rounded bg-sky-500" style={{ width: `${Math.max(1, (l.bytes / Math.max(1, catData.bytes)) * 100)}%` }} /></div>
+                        <span className="w-44 shrink-0 truncate"><Chip v={l.verdict} /> <span className="text-zinc-500">{!l.deletable && '🔒'}</span></span>
+                      </div>
+                    ))}
+                    {catData.moreLocations > 0 && <div className="text-xs text-zinc-500">+{catData.moreLocations} smaller locations</div>}
                   </div>
                   <div className="text-xs text-zinc-500">Showing the {catData.items.length} largest files{catData.onlyExt !== null ? ` of this extension` : ''} ({fmtBytes(catData.listedBytes)}). Files under 256 KB are counted in the totals but not listed one by one.</div>
                   <RowTable rows={catData.items} total={catData.bytes || 1} onOpenDir={() => {}} onDone={(m) => { setMsg(m); refreshAll(); }} mode={state.mode} showPath />

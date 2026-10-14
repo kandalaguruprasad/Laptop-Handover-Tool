@@ -62,7 +62,7 @@ function createDiskService(app) {
     for (let i = n - 1; i > 0; i--) { total[parents[i]] += total[i]; totalFiles[parents[i]] += totalFiles[i]; }
     const first = new Int32Array(n).fill(-1); const next = new Int32Array(n).fill(-1);
     for (let i = n - 1; i > 0; i--) { next[i] = first[parents[i]]; first[parents[i]] = i; }
-    st.tree = { names: m.names, parents, own: m.own, ownFiles: m.ownFiles, total, totalFiles, first, next, gone: new Uint8Array(n), top: m.top, ext: m.ext, extTop: new Map(m.extTop), cloud: m.cloud, errors: m.stats.errors, errorSamples: m.errorSamples, rootPath: env().root };
+    st.tree = { names: m.names, parents, own: m.own, ownFiles: m.ownFiles, total, totalFiles, first, next, gone: new Uint8Array(n), top: m.top, ext: m.ext, extTop: new Map(m.extTop), extLoc: m.extLoc, cloud: m.cloud, errors: m.stats.errors, errorSamples: m.errorSamples, rootPath: env().root };
   }
 
   function start() {
@@ -141,10 +141,15 @@ function createDiskService(app) {
     for (const [e, b, c] of t.ext) if ((TYPE_OF.get(e) || 'Other files') === name) { exts.push({ ext: e, bytes: b, files: c }); bytes += b; files += c; }
     if (!exts.length) throw new Error('Unknown file type group.');
     exts.sort((a, b) => b.bytes - a.bytes);
+    // where these files live: bytes per location (first 3 folder levels), rated like any folder
+    const e = env(); const locs = new Map();
+    for (const [x, loc, b, c] of t.extLoc) if ((TYPE_OF.get(x) || 'Other files') === name && (onlyExt === undefined || onlyExt === x)) { const l = locs.get(loc) || { bytes: 0, files: 0 }; l.bytes += b; l.files += c; locs.set(loc, l); }
+    const locList = [...locs].map(([loc, v]) => { const p = loc ? path.join(t.rootPath, loc) : t.rootPath; const x = explain(p, true, e); return { path: p, bytes: v.bytes, files: v.files, verdict: x.verdict, title: x.title, deletable: x.deletable }; }).sort((a, b) => b.bytes - a.bytes);
+    const protectedBytes = locList.filter((l) => !l.deletable && (l.verdict === 'keep' || l.verdict === 'system')).reduce((a, l) => a + l.bytes, 0);
     let items = [];
     for (const x of exts) if (onlyExt === undefined || onlyExt === x.ext) for (const f of t.extTop.get(x.ext) || []) items.push(f);
     items = items.filter((f) => fs.existsSync(f.p)).sort((a, b) => b.s - a.s).slice(0, 300);
-    return { name, bytes, files, exts: exts.slice(0, 60), moreExts: Math.max(0, exts.length - 60), onlyExt: onlyExt === undefined ? null : onlyExt,
+    return { name, bytes, files, locations: locList.slice(0, 15), moreLocations: Math.max(0, locList.length - 15), protectedBytes, exts: exts.slice(0, 60), moreExts: Math.max(0, exts.length - 60), onlyExt: onlyExt === undefined ? null : onlyExt,
       items: items.map((f) => view(f.p, false, f.s, { m: f.m })), listedBytes: items.reduce((a, f) => a + f.s, 0) };
   }
 

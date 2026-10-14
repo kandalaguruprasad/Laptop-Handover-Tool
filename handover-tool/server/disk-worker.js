@@ -18,6 +18,7 @@ const names = [path.basename(root) || root]; const parents = [-1]; const own = [
 const stats = { files: 0, dirs: 1, bytes: 0, errors: 0 };
 const errorSamples = []; const cloud = []; const ext = new Map(); let top = []; let topMin = 0;
 const seenLinks = new Set();
+const extLoc = new Map(); // `${ext}\u0001${location}` -> [bytes, count]: where each file type lives (first 3 folder levels)
 const extTop = new Map(); // ext -> largest files with that extension (so a file type can be opened and cleaned)
 let lastProgress = 0; let current = root;
 
@@ -36,8 +37,15 @@ function addTop(p, size, m) {
   if (top.length >= 300) topMin = top.length > 300 ? 0 : Math.min(...top.map((t) => t.s));
 }
 
+function locationOf(dir) {
+  const rel = path.relative(root, dir);
+  if (!rel) return '';
+  return rel.split(path.sep).slice(0, 3).join(path.sep);
+}
+
 async function processDir(idx, dir) {
   current = dir;
+  const loc = locationOf(dir);
   let entries;
   try { entries = await limiter.run(() => readDirents(dir)); } catch (e) { noteError(e, dir); return []; }
   const items = await classify(dir, entries, limiter);
@@ -62,6 +70,7 @@ async function processDir(idx, dir) {
           own[idx] += st.size; ownFiles[idx]++; stats.files++; stats.bytes += st.size;
           const x = path.extname(e.name).slice(1).toLowerCase();
           const c = ext.get(x) || [0, 0]; c[0] += st.size; c[1]++; ext.set(x, c);
+          const lk = x + '\u0001' + loc; const lc = extLoc.get(lk) || [0, 0]; lc[0] += st.size; lc[1]++; extLoc.set(lk, lc);
           if (st.size > 5 * 1024 * 1024) addTop(full, st.size, st.mtimeMs);
           if (st.size >= minListBytes) {
             let arr = extTop.get(x); if (!arr) extTop.set(x, (arr = []));
@@ -94,7 +103,7 @@ async function main() {
   top.sort((a, b) => b.s - a.s); top = top.slice(0, 300);
   const out = {
     type: 'done', cancelled, names, parents: Int32Array.from(parents), own: Float64Array.from(own), ownFiles: Int32Array.from(ownFiles),
-    top, ext: [...ext].map(([k, v]) => [k, v[0], v[1]]), extTop: [...extTop].map(([k, a]) => [k, a.sort((x, y) => y.s - x.s).slice(0, 200)]), cloud, stats, errorSamples,
+    top, ext: [...ext].map(([k, v]) => [k, v[0], v[1]]), extLoc: [...extLoc].map(([k, v]) => { const i = k.indexOf('\u0001'); return [k.slice(0, i), k.slice(i + 1), v[0], v[1]]; }), extTop: [...extTop].map(([k, a]) => [k, a.sort((x, y) => y.s - x.s).slice(0, 200)]), cloud, stats, errorSamples,
   };
   parentPort.postMessage(out, [out.parents.buffer, out.own.buffer, out.ownFiles.buffer]);
 }
