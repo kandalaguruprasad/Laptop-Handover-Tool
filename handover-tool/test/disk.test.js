@@ -44,6 +44,14 @@ test('knowledge: verdicts and deletable flags', () => {
   assert.strictEqual(x('/tmp/sb/Projects/webapp').verdict, 'review');
   assert.strictEqual(x('/tmp/sb/profile/Downloads/big.iso', false).verdict, 'review');
   assert.strictEqual(x('/tmp/sb/.recycle/foo').special, 'recycle');
+  // AppData: never deletable as a whole, but known caches inside it are safe
+  assert.ok(!x('/tmp/sb/profile/AppData').deletable && !x('/tmp/sb/profile/AppData/Local').deletable && !x('/tmp/sb/profile/AppData/Roaming').deletable);
+  assert.strictEqual(x('/tmp/sb/profile/AppData/Roaming/Code/CachedData').group, 'appcache');
+  assert.strictEqual(x('/tmp/sb/profile/AppData/Local/Slack/Cache').group, 'appcache');
+  assert.strictEqual(x('/tmp/sb/profile/AppData/Roaming/Microsoft/Teams/Cache').group, 'appcache');
+  assert.ok(!x('/tmp/sb/profile/AppData/Roaming/Code/User').deletable, 'settings/sign-in data is not a cache');
+  assert.ok(!x('/tmp/sb/profile/.m2').deletable && /Maven/.test(x('/tmp/sb/profile/.m2').title) && x('/tmp/sb/profile/.m2/repository/org').deletable);
+  assert.ok(!x('/tmp/sb/profile/.cursor').deletable && x('/tmp/sb/profile/.rustup').verdict === 'review');
 });
 
 test('C Drive: scan totals, browse with explanations, quick wins, guarded cleanup', async (t) => {

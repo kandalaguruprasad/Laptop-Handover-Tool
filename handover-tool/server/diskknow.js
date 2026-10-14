@@ -39,6 +39,24 @@ const EXT_HINT = [
   [/\.(pst|ost)$/i, 'review', 'Outlook mail data', 'Local copy of an Outlook mailbox. OST files are re-created from the server; PST files may be your only copy.'],
 ];
 
+// well-known tool folders directly inside the profile: explained, never deletable as a whole (look inside for the big parts)
+const DEV_DIRS = {
+  '.m2': ['Maven libraries', 'Libraries your Java builds downloaded. They download again when a project builds. The folder itself stays; delete inside if you need space.'],
+  '.cursor': ['Cursor editor data', 'Cursor editor extensions and settings. Extensions can be re-installed; settings are lost if deleted.'],
+  '.vscode': ['VS Code data', 'VS Code extensions and settings. Extensions can be re-installed.'],
+  '.cargo': ['Rust packages', 'Rust crates and tools you downloaded. They download again when needed.'],
+  '.rustup': ['Rust toolchains', 'Installed Rust compilers. Re-installable with rustup, but projects will need them.'],
+  '.jdks': ['Java JDKs', 'Java versions downloaded by your IDE. Delete only the ones no project uses.'],
+  '.gradle': ['Gradle', 'Gradle build tool files and caches (the caches inside re-download).'],
+  '.nuget': ['NuGet packages', '.NET libraries your builds downloaded. They re-download when needed.'],
+  '.npm': ['npm', 'npm settings and download cache.'],
+  '.android': ['Android tools', 'Android emulators and keys. Emulators (avd) are large and re-creatable.'],
+  '.conda': ['Conda', 'Conda environments and packages.'],
+  '.anaconda': ['Anaconda', 'Anaconda settings.'],
+  '.ollama': ['Ollama models', 'Downloaded AI models. Large; re-download when needed.'],
+  '.lmstudio': ['LM Studio models', 'Downloaded AI models. Large; re-download when needed.'],
+};
+const APP_CACHE_DIRS = /^(cache|code cache|gpucache|cacheddata|cachedextensions|cachedextensionvsixs|crashpad|dawncache|grshadercache|shadercache|blob_storage|component_crx_cache|logs|log)$/i;
 const STD_FOLDERS = new Set(['desktop', 'documents', 'downloads', 'pictures', 'videos', 'music', 'favorites', 'links', 'searches', 'contacts', 'saved games', '3d objects']);
 const CLOUD_RE = /^(onedrive|dropbox|google ?drive|icloud)/i;
 
@@ -90,7 +108,9 @@ function explain(p, isDir, env) {
     if (/appdata\/local\/(google\/chrome|microsoft\/edge|bravesoftware\/brave-browser|mozilla\/firefox|opera software)\/.*\/(cache|code cache|gpucache|cache2|service worker\/cachestorage|media cache)$/.test(relLower)) return R('safe', 'Browser cache', 'Web pages/images your browser saved to load faster. Rebuilds automatically (close the browser first). Passwords and bookmarks are NOT in here.', true, { group: 'browser' });
     if (/(^|\/)(appdata\/local\/npm-cache|\.npm\/_cacache|appdata\/local\/pip\/cache|\.cache|\.gradle\/caches|appdata\/local\/yarn\/cache|appdata\/local\/pnpm-cache|appdata\/local\/pnpm\/store)(\/|$)/.test(relLower)) return R('safe', 'Developer download cache', 'Packages your tools downloaded before. They re-download when needed (a little slower the next time).', !/\/?(\.cache|\.gradle\/caches|npm-cache|_cacache|pip\/cache)$/.test(relLower), { group: 'devcache' });
     if (isDir && REPRO_DIRS[lbase]) return R('safe', lbase, `${REPRO_DIRS[lbase]}. Can be rebuilt. Only delete if you are finished with that project or do not mind rebuilding.`, true, { group: lbase === 'node_modules' ? 'node_modules' : 'repro' });
+    if (rel.length === 1 && DEV_DIRS[top]) return R('review', `${DEV_DIRS[top][0]} (${base})`, DEV_DIRS[top][1], false);
     if (/^\.(ssh|aws|gnupg|kube|azure|docker)$/.test(top) || top === '.gitconfig' || top === '.config') return R('keep', base, 'Keys, credentials or tool settings. Deleting them can lock you out of servers or accounts.', false);
+    if (top === 'appdata' && isDir && APP_CACHE_DIRS.test(base) && rel.length > 2) return R('safe', 'Application cache / logs', 'Cache or log folder of a program (Teams, VS Code, Slack, Discord, browsers…). It is re-created automatically. Close the program first; files in use are skipped.', true, { group: 'appcache' });
     if (top === 'appdata') {
       if (rel.length === 1) return R('keep', 'AppData', 'Settings and data of your programs (caches, logins, game saves). Look inside for what is big.', false);
       const sub = (rel[1] || '').toLowerCase(); const rest = rel.slice(2).join('/').toLowerCase();
@@ -123,7 +143,7 @@ function explain(p, isDir, env) {
 
 const GROUP_TITLES = {
   recycle: 'Recycle Bin', temp: 'Temporary files', winupdate: 'Windows Update downloads', crash: 'Crash dumps', thumb: 'Thumbnail & web cache', browser: 'Browser caches',
-  devcache: 'Developer download caches', node_modules: 'node_modules folders (all projects)', repro: 'Other rebuildable project folders (.venv, __pycache__ …)',
+  devcache: 'Developer download caches', appcache: 'Application caches & logs (Teams, VS Code, Slack, Discord…)', node_modules: 'node_modules folders (all projects)', repro: 'Other rebuildable project folders (.venv, __pycache__ …)',
 };
 
 module.exports = { buildEnv, explain, GROUP_TITLES, REPRO_DIRS, CLOUD_RE };

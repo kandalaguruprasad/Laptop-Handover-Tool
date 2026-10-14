@@ -19,7 +19,7 @@ const TYPE_GROUPS = [
 ];
 const TYPE_OF = new Map(); for (const [g, list] of TYPE_GROUPS) for (const e of list.split(' ')) TYPE_OF.set(e, g);
 const QUICK_NAMES = new Set(['node_modules', '.venv', 'venv', '__pycache__', '.next', '.pytest_cache', '.parcel-cache', '.turbo', '.gradle', 'cache', 'code cache', 'gpucache', 'cache2', 'temp', 'crashdumps', 'inetcache',
-  'minidump', 'livekernelreports', 'download', '_cacache', 'caches', 'explorer', 'npm-cache', '.cache', 'store', 'media cache', 'cachestorage', '$recycle.bin', '.recycle']);
+  'minidump', 'livekernelreports', 'download', '_cacache', 'caches', 'explorer', 'npm-cache', '.cache', 'store', 'media cache', 'cachestorage', '$recycle.bin', '.recycle', 'cacheddata', 'cachedextensions', 'cachedextensionvsixs', 'crashpad', 'dawncache', 'grshadercache', 'shadercache', 'blob_storage', 'component_crx_cache', 'logs', 'log', 'registry']);
 
 function createDiskService(app) {
   const st = { running: false, stats: null, current: '', startedAt: 0, error: null, scannedAt: 0, tree: null, worker: null };
