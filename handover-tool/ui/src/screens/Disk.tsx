@@ -250,12 +250,22 @@ function RowTable({ rows, total, onOpenDir, onDone, mode, showPath }: { rows: Ro
   const [open, setOpen] = useState<string | null>(null);
   useEffect(() => setSel(new Set()), [rows]);
   const chosen = rows.filter((r) => sel.has(r.path));
+  const deletable = rows.filter((r) => r.deletable);
+  const allOn = deletable.length > 0 && deletable.every((r) => sel.has(r.path));
+  const selectAll = () => setSel(new Set(deletable.map((r) => r.path)));
+  const protectedCount = rows.length - deletable.length;
   const toggle = (p: string) => setSel((s) => { const n = new Set(s); if (n.has(p)) n.delete(p); else n.add(p); return n; });
   return (
     <>
+      <div className="flex flex-wrap items-center gap-3 text-xs">
+        <button className="btn" disabled={!deletable.length || allOn} onClick={selectAll}>Select all {deletable.length.toLocaleString()} ({fmtBytes(deletable.reduce((a, r) => a + r.size, 0))})</button>
+        {sel.size > 0 && <button className="btn" onClick={() => setSel(new Set())}>Deselect all</button>}
+        {protectedCount > 0 && <span className="text-zinc-500">{protectedCount} protected item(s) (Windows, programs or your company handover folder) cannot be selected.</span>}
+        <span className="text-zinc-500">Select-all covers the rows listed below only. Look at the paths before you delete.</span>
+      </div>
       <div className="max-h-[32rem] overflow-auto text-sm">
         <table className="w-full">
-          <thead className="sticky top-0 bg-zinc-900 text-left text-xs text-zinc-500"><tr><th className="w-8 p-1" /><th>Name</th><th className="w-40">Share</th><th className="text-right">Size</th><th className="text-right">Files</th><th>What is it?</th></tr></thead>
+          <thead className="sticky top-0 bg-zinc-900 text-left text-xs text-zinc-500"><tr><th className="w-8 p-1"><input type="checkbox" title="Select / deselect all" disabled={!deletable.length} checked={allOn} onChange={() => (allOn ? setSel(new Set()) : selectAll())} /></th><th>Name</th><th className="w-40">Share</th><th className="text-right">Size</th><th className="text-right">Files</th><th>What is it?</th></tr></thead>
           <tbody>
             {rows.map((r) => (
               <Fragment key={r.path}>

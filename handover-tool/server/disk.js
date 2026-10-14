@@ -23,7 +23,7 @@ const QUICK_NAMES = new Set(['node_modules', '.venv', 'venv', '__pycache__', '.n
 
 function createDiskService(app) {
   const st = { running: false, stats: null, current: '', startedAt: 0, error: null, scannedAt: 0, tree: null, worker: null };
-  const env = () => buildEnv({ sandbox: app.sandbox, profileRoot: app.settings.profileRoot });
+  const env = () => buildEnv({ sandbox: app.sandbox, profileRoot: app.settings.profileRoot, companyFolder: app.settings.companyFolder, appRoot: app.appRoot });
   const diskGuard = {
     get destructiveEnabled() { return app.guard.destructiveEnabled; },
     assertWritable(p) {

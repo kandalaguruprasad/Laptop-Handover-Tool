@@ -44,6 +44,10 @@ test('knowledge: verdicts and deletable flags', () => {
   assert.strictEqual(x('/tmp/sb/Projects/webapp').verdict, 'review');
   assert.strictEqual(x('/tmp/sb/profile/Downloads/big.iso', false).verdict, 'review');
   assert.strictEqual(x('/tmp/sb/.recycle/foo').special, 'recycle');
+  const envC = buildEnv({ sandbox: '/tmp/sb', companyFolder: '/tmp/sb/Company_Handover', appRoot: '/tmp/sb/tool' });
+  const c = explain('/tmp/sb/Company_Handover/Frontend/src/assets/img.jpg', false, envC);
+  assert.deepStrictEqual([c.verdict, c.deletable], ['keep', false], 'handover files are protected from select-all');
+  assert.ok(!explain('/tmp/sb/tool/data/tags.json', false, envC).deletable);
   // AppData: never deletable as a whole, but known caches inside it are safe
   assert.ok(!x('/tmp/sb/profile/AppData').deletable && !x('/tmp/sb/profile/AppData/Local').deletable && !x('/tmp/sb/profile/AppData/Roaming').deletable);
   assert.strictEqual(x('/tmp/sb/profile/AppData/Roaming/Code/CachedData').group, 'appcache');

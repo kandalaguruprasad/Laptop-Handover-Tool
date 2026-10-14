@@ -8,12 +8,12 @@ const path = require('path');
 const os = require('os');
 const { norm, key, isInside, isWin } = require('./platform');
 
-function buildEnv({ sandbox, profileRoot }) {
+function buildEnv({ sandbox, profileRoot, companyFolder, appRoot }) {
   if (sandbox) {
     const root = norm(sandbox); const profile = norm(profileRoot || path.join(root, 'profile'));
     const local = path.join(profile, 'AppData', 'Local');
     return { root, profile, usersRoot: path.join(root, '_Users') /* sandbox has no other accounts */, local, roaming: path.join(profile, 'AppData', 'Roaming'), temp: path.join(local, 'Temp'), windows: path.join(root, 'Windows'),
-      pf: [path.join(root, 'Program Files'), path.join(root, 'Program Files (x86)')], pd: path.join(root, 'ProgramData'), recycle: path.join(root, '.recycle'), sandbox: true };
+      pf: [path.join(root, 'Program Files'), path.join(root, 'Program Files (x86)')], pd: path.join(root, 'ProgramData'), recycle: path.join(root, '.recycle'), sandbox: true, company: companyFolder ? norm(companyFolder) : '', appRoot: appRoot ? norm(appRoot) : '' };
   }
   const e = process.env;
   const profile = norm(profileRoot || os.homedir());
@@ -21,7 +21,7 @@ function buildEnv({ sandbox, profileRoot }) {
   const local = norm(e.LOCALAPPDATA || path.join(profile, 'AppData', 'Local'));
   return { root, profile, usersRoot: path.join(root, '_Users') /* sandbox has no other accounts */, local, roaming: norm(e.APPDATA || path.join(profile, 'AppData', 'Roaming')), temp: norm(e.TEMP || path.join(local, 'Temp')),
     windows: norm(e.SystemRoot || path.join(root, 'Windows')), pf: [e.ProgramFiles, e['ProgramFiles(x86)']].filter(Boolean).map(norm), pd: norm(e.ProgramData || path.join(root, 'ProgramData')),
-    recycle: path.join(root, '$Recycle.Bin'), sandbox: false };
+    recycle: path.join(root, '$Recycle.Bin'), sandbox: false, company: companyFolder ? norm(companyFolder) : '', appRoot: appRoot ? norm(appRoot) : '' };
 }
 
 const REPRO_DIRS = { 'node_modules': 'npm/yarn packages (re-install with `npm install`)', '.venv': 'a Python virtual environment (re-create with pip)', 'venv': 'a Python virtual environment (re-create with pip)',
@@ -69,6 +69,8 @@ function explain(p, isDir, env) {
 
   if (eq(env.root)) return R('system', 'The drive itself', 'Top of the drive.', false);
   if (eqOrUnder(env.recycle)) return R('safe', 'Recycle Bin', 'Things you already deleted. They still use space until the bin is emptied. Check you do not need anything in it, then use "Empty Recycle Bin".', false, { special: 'recycle', group: 'recycle' });
+  if (env.company && eqOrUnder(env.company)) return R('keep', 'Company handover folder', 'This is what you are handing over to the company. It is protected here so a "select all" cannot delete it by mistake. Reorganise it in the Company Groups tab, or delete inside it by hand in Explorer if you really must.', false);
+  if (env.appRoot && eqOrUnder(env.appRoot)) return R('keep', 'This handover tool', 'The tool you are using right now, with its scan data and reports.', false);
   if (path.dirname(n) === norm(env.root)) {
     if (/^(pagefile|hiberfil|swapfile)\.sys$/i.test(base)) {
       const why = { 'pagefile.sys': 'Windows virtual memory (swap). Windows manages its size; leave it.', 'swapfile.sys': 'Windows swap file for apps. Leave it.', 'hiberfil.sys': 'Hibernate / fast-startup file, often as big as your RAM. Only an administrator can shrink it (powercfg /h off) and it is not safe to delete by hand.' }[lbase];
