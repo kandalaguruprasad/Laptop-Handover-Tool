@@ -123,7 +123,7 @@ function explain(p, isDir, env) {
       if (sub === 'local' && /^microsoft(\/|$)/.test(rest)) return R('keep', `Microsoft: ${rel.slice(2).join('\\')}`, 'Windows and Microsoft programs keep their data here. Leave it.', false);
       if (sub === 'local' && /^programs(\/|$)/.test(rest)) return R('keep', rel.length > 3 ? `Program: ${rel[3]}` : 'Per-user programs', 'Programs installed just for you. Uninstall them from the Apps tab.', false);
       if (sub === 'local' && /^(docker|android\/sdk)(\/|$)/.test(rest)) return R('review', rest.startsWith('docker') ? 'Docker data' : 'Android SDK', rest.startsWith('docker') ? 'Docker images and the WSL disk. Huge, but deleting breaks your containers.' : 'Android development tools. Delete only if you no longer build Android apps.', rel.length > 3);
-      return R('review', `Program data: ${rel.slice(1).join('\\')}`, 'Data left by a program. If you uninstalled that program the folder is leftover and the Apps tab can remove it; otherwise leave it.', false);
+      return R('keep', `Program data: ${rel[2] || rel[1]}`, `AppData\\${rel.slice(1).join('\\')}. Data kept by a program (settings, caches, plug-ins, logins). Not offered for deletion here: if you uninstalled that program, the Apps tab can remove its leftovers; otherwise leave it.`, false);
     }
     if (STD_FOLDERS.has(top) && rel.length === 1) return R('review', base, 'One of your personal folders. The folder itself stays; decide what to remove inside it.', false);
     if (CLOUD_RE.test(rel[0]) && rel.length === 1) return R('review', `${base} (cloud-synced)`, 'Synced with the cloud. Online-only files here do not use disk space. Deleting inside it deletes from the cloud too.', false);

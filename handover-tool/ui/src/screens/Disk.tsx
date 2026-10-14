@@ -264,17 +264,27 @@ function RowTable({ rows, total, onOpenDir, onDone, mode, showPath }: { rows: Ro
         <span className="text-zinc-500">Select-all covers the rows listed below only. Look at the paths before you delete.</span>
       </div>
       <div className="max-h-[32rem] overflow-auto text-sm">
-        <table className="w-full">
-          <thead className="sticky top-0 bg-zinc-900 text-left text-xs text-zinc-500"><tr><th className="w-8 p-1"><input type="checkbox" title="Select / deselect all" disabled={!deletable.length} checked={allOn} onChange={() => (allOn ? setSel(new Set()) : selectAll())} /></th><th>Name</th><th className="w-40">Share</th><th className="text-right">Size</th><th className="text-right">Files</th><th>What is it?</th></tr></thead>
+        <table className="w-full table-fixed">
+          <colgroup><col style={{ width: 32 }} /><col style={{ width: '30%' }} /><col style={{ width: 110 }} /><col style={{ width: 90 }} /><col style={{ width: 90 }} /><col /></colgroup>
+          <thead className="sticky top-0 z-10 bg-zinc-900 text-left text-xs text-zinc-500">
+            <tr><th className="p-1"><input type="checkbox" title="Select / deselect all" disabled={!deletable.length} checked={allOn} onChange={() => (allOn ? setSel(new Set()) : selectAll())} /></th>
+              <th>Name</th><th>Share</th><th className="text-right">Size</th><th className="pl-3">{rows.some((r) => r.files !== undefined) ? 'Files / Modified' : 'Modified'}</th><th className="pl-2">What is it?</th></tr>
+          </thead>
           <tbody>
             {rows.map((r) => (
               <Fragment key={r.path}>
-                <tr className="border-t border-zinc-800 align-top hover:bg-zinc-900">
-                  <td className="p-1"><input type="checkbox" disabled={!r.deletable} checked={sel.has(r.path)} onChange={() => toggle(r.path)} title={r.deletable ? 'Select for cleanup' : 'Protected: Windows or a program needs this (or use the Apps tab)'} /></td>
-                  <td className="max-w-xs"><div className="truncate font-medium" title={r.path}>{r.isDir ? <button className="text-sky-300 hover:underline" onClick={() => onOpenDir(r.path)}>📁 {r.name}</button> : <span>📄 {r.name}</span>}</div>{showPath && <div className="truncate text-xs text-zinc-500" title={r.path}>{r.path}</div>}</td>
-                  <td><div className="h-2 w-36 rounded bg-zinc-800"><div className="h-full rounded bg-sky-500" style={{ width: `${Math.max(1, Math.min(100, (r.size / total) * 100))}%` }} /></div></td>
-                  <td className="whitespace-nowrap text-right">{fmtBytes(r.size)}</td><td className="text-right text-xs text-zinc-400">{r.files !== undefined ? r.files.toLocaleString() : r.m ? fmtDate(r.m) : ''}</td>
-                  <td className="cursor-pointer" onClick={() => setOpen(open === r.path ? null : r.path)}><Chip v={r.verdict} /> <span className="text-xs text-zinc-400">{r.title}</span></td>
+                <tr className="h-12 border-t border-zinc-800 hover:bg-zinc-900">
+                  <td className="p-1 align-middle"><input type="checkbox" disabled={!r.deletable} checked={sel.has(r.path)} onChange={() => toggle(r.path)} title={r.deletable ? 'Select for cleanup' : '🔒 Protected: Windows, a program or your company handover folder needs this'} /></td>
+                  <td className="overflow-hidden align-middle pr-2">
+                    <div className="truncate font-medium" title={r.path}>{r.isDir ? <button className="text-sky-300 hover:underline" onClick={() => onOpenDir(r.path)}>📁 {r.name}</button> : <span>📄 {r.name}</span>}</div>
+                    {showPath && <div className="truncate text-xs text-zinc-500" title={r.path}>{r.path}</div>}
+                  </td>
+                  <td className="align-middle"><div className="h-2 w-24 rounded bg-zinc-800"><div className="h-full rounded bg-sky-500" style={{ width: `${Math.max(1, Math.min(100, (r.size / total) * 100))}%` }} /></div></td>
+                  <td className="whitespace-nowrap text-right align-middle">{fmtBytes(r.size)}</td>
+                  <td className="whitespace-nowrap pl-3 align-middle text-xs text-zinc-400">{r.files !== undefined ? `${r.files.toLocaleString()} files` : r.m ? fmtDate(r.m) : ''}</td>
+                  <td className="cursor-pointer overflow-hidden pl-2 align-middle" onClick={() => setOpen(open === r.path ? null : r.path)} title={r.why}>
+                    <div className="flex items-center gap-2"><Chip v={r.verdict} /><span className="truncate text-xs text-zinc-400">{!r.deletable && '🔒 '}{r.title}</span></div>
+                  </td>
                 </tr>
                 {open === r.path && <tr className="bg-zinc-900/60"><td /><td colSpan={5} className="p-2 text-xs text-zinc-300"><b>{r.title}.</b> {r.why}<div className="break-all text-zinc-500">{r.path}</div></td></tr>}
               </Fragment>
